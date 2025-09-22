@@ -14,6 +14,7 @@ const docsRoutes = require("./src/routes/docsRoutes");
 
 // Import middleware
 const errorHandler = require("./src/middleware/errorHandler");
+const { jsonErrorHandler } = require("./src/middleware/jsonErrorHandler");
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -21,6 +22,8 @@ const HOST = "127.0.0.1"; // IPv4 binding to prevent IPv6 connection attempts
 
 // Middleware for parsing JSON
 app.use(express.json());
+// JSON error handler (catches the SyntaxError)
+app.use(jsonErrorHandler);
 
 // Request logging middleware (optional, for debugging)
 if (process.env.NODE_ENV === "development") {
