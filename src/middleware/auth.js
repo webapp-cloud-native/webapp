@@ -1,5 +1,9 @@
-const { AuthService } = require("../services/authService");
+const { authenticateFromHeader } = require("../services/authService");
 
+/**
+ * Authentication middleware for protected routes
+ * Validates Basic Authentication and sets req.user
+ */
 const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.get("Authorization");
@@ -11,8 +15,8 @@ const authenticate = async (req, res, next) => {
       });
     }
 
-    // Authenticate user
-    const user = await AuthService.authenticateFromHeader(authHeader);
+    // Authenticate user using function instead of class method
+    const user = await authenticateFromHeader(authHeader);
 
     if (!user) {
       return res.status(401).json({
@@ -33,13 +37,16 @@ const authenticate = async (req, res, next) => {
   }
 };
 
-
+/**
+ * Optional authentication middleware
+ * Sets req.user if valid credentials provided, but doesn't require it
+ */
 const optionalAuth = async (req, res, next) => {
   try {
     const authHeader = req.get("Authorization");
 
     if (authHeader) {
-      const user = await AuthService.authenticateFromHeader(authHeader);
+      const user = await authenticateFromHeader(authHeader);
       if (user) {
         req.user = user;
       }
