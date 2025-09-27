@@ -242,7 +242,7 @@ PORT=8080
 - **Production**: Set `LOG_LEVEL=error` for minimal logging
 - **Debug Mode**: Set `DEBUG=true` for detailed logs
 
-## Directory Structure
+## Directory Structures of Projects
 
 ```
 webapp/
