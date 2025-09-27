@@ -168,3 +168,25 @@ describe('Health Check API', () => {
     });
   });
 });
+  describe('CI Workflow Verification Tests', () => {
+    test('should return proper response time', async () => {
+      const start = Date.now();
+      const response = await appHelper.getRequest()
+        .get('/healthz')
+        .expect(200);
+      const duration = Date.now() - start;
+      
+      // Should respond within 1 second
+      expect(duration).toBeLessThan(1000);
+    });
+
+    test('should handle case-insensitive headers', async () => {
+      const response = await appHelper.getRequest()
+        .get('/healthz')
+        .set('accept', 'text/plain')
+        .expect(200);
+
+      expect(response.text).toBe('');
+    });
+  });
+});
