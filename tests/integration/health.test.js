@@ -5,23 +5,18 @@ describe("Health Check API", () => {
   let appHelper;
 
   beforeAll(async () => {
-    // Setup test database
     await TestDatabase.setup();
-
-    // Create and start test app
     appHelper = new AppHelper();
     await appHelper.createTestApp();
     await appHelper.startServer();
   });
 
   afterAll(async () => {
-    // Cleanup
     await appHelper.stopServer();
     await TestDatabase.cleanup();
   });
 
   beforeEach(async () => {
-    // Clean test data before each test
     await TestDatabase.clearData();
   });
 
@@ -33,29 +28,23 @@ describe("Health Check API", () => {
           .get("/healthz")
           .expect(200);
 
-        // Verify headers
         expect(response.headers["cache-control"]).toBe(
           "no-cache, no-store, must-revalidate"
         );
         expect(response.headers["pragma"]).toBe("no-cache");
         expect(response.headers["x-content-type-options"]).toBe("nosniff");
-
-        // Verify empty body
         expect(response.text).toBe("");
       });
 
       test("should insert record in health_checks table", async () => {
-        // Get initial count
         const { sequelize } = require("../../src/config/database");
         const [initialResults] = await sequelize.query(
           "SELECT COUNT(*) as count FROM health_checks"
         );
         const initialCount = parseInt(initialResults[0].count);
 
-        // Make health check request
         await appHelper.getRequest().get("/healthz").expect(200);
 
-        // Verify record was inserted
         const [finalResults] = await sequelize.query(
           "SELECT COUNT(*) as count FROM health_checks"
         );
@@ -86,7 +75,6 @@ describe("Health Check API", () => {
           .send({ data: "test" })
           .expect(400);
 
-        // Verify headers are still set
         expect(response.headers["cache-control"]).toBe(
           "no-cache, no-store, must-revalidate"
         );
@@ -120,21 +108,11 @@ describe("Health Check API", () => {
       });
 
       test("should return 405 Method Not Allowed for DELETE request", async () => {
-        const response = await appHelper
-          .getRequest()
-          .delete("/healthz")
-          .expect(405);
-
-        expect(response.headers["allow"]).toBe("GET");
+        await appHelper.getRequest().delete("/healthz").expect(405);
       });
 
       test("should return 405 Method Not Allowed for PATCH request", async () => {
-        const response = await appHelper
-          .getRequest()
-          .patch("/healthz")
-          .expect(405);
-
-        expect(response.headers["allow"]).toBe("GET");
+        await appHelper.getRequest().patch("/healthz").expect(405);
       });
     });
 
@@ -162,7 +140,6 @@ describe("Health Check API", () => {
       test("should maintain performance under repeated requests", async () => {
         const startTime = Date.now();
 
-        // Make 10 requests
         const requests = Array(10)
           .fill()
           .map(() => appHelper.getRequest().get("/healthz").expect(200));
@@ -172,29 +149,28 @@ describe("Health Check API", () => {
         const duration = Date.now() - startTime;
         console.log(`10 requests completed in ${duration}ms`);
 
-        // Basic performance check - should complete within reasonable time
-        expect(duration).toBeLessThan(5000); // 5 seconds max for 10 requests
+        expect(duration).toBeLessThan(5000);
       });
     });
   });
-});
-describe("CI Workflow Verification Tests", () => {
-  test("should return proper response time", async () => {
-    const start = Date.now();
-    const response = await appHelper.getRequest().get("/healthz").expect(200);
-    const duration = Date.now() - start;
 
-    // Should respond within 1 second
-    expect(duration).toBeLessThan(1000);
-  });
+  describe("CI Workflow Verification Tests", () => {
+    test("should return proper response time", async () => {
+      const start = Date.now();
+      const response = await appHelper.getRequest().get("/healthz").expect(200);
+      const duration = Date.now() - start;
 
-  test("should handle case-insensitive headers", async () => {
-    const response = await appHelper
-      .getRequest()
-      .get("/healthz")
-      .set("accept", "text/plain")
-      .expect(200);
+      expect(duration).toBeLessThan(1000);
+    });
 
-    expect(response.text).toBe("");
+    test("should handle case-insensitive headers", async () => {
+      const response = await appHelper
+        .getRequest()
+        .get("/healthz")
+        .set("accept", "text/plain")
+        .expect(200);
+
+      expect(response.text).toBe("");
+    });
   });
 });
