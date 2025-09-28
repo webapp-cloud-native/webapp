@@ -4,6 +4,7 @@ const TestDatabase = require('../config/test-database');
 
 // Import your existing middleware and routes
 const healthRoutes = require('../../src/routes/healthRoutes');
+const userRoutes = require('../../src/routes/userRoutes');
 const errorHandler = require('../../src/middleware/errorHandler');
 const { jsonErrorHandler } = require('../../src/middleware/jsonErrorHandler');
 
@@ -20,14 +21,25 @@ class AppHelper {
     app.use(express.json());
     app.use(jsonErrorHandler);
     
+    // Request logging middleware (optional, for debugging)
+    if (process.env.NODE_ENV === "development") {
+      app.use((req, res, next) => {
+        console.log(`${req.method} ${req.path} - ${new Date().toISOString()}`);
+        next();
+      });
+    }
+    
     // Add routes
     app.use('/', healthRoutes);
+    app.use('/', userRoutes);
     
-    // 404 handler
+    // 404 handler for undefined routes
     app.use((req, res) => {
       res.status(404).json({
         error: "Not Found",
-        message: "The requested resource was not found on this server"
+        message: "The requested resource was not found on this server",
+        path: req.path,
+        method: req.method,
       });
     });
     
