@@ -1,12 +1,12 @@
-const request = require('supertest');
-const express = require('express');
-const TestDatabase = require('../config/test-database');
+const request = require("supertest");
+const express = require("express");
+const TestDatabase = require("../config/test-database");
 
 // Import your existing middleware and routes
-const healthRoutes = require('../../src/routes/healthRoutes');
-const userRoutes = require('../../src/routes/userRoutes');
-const errorHandler = require('../../src/middleware/errorHandler');
-const { jsonErrorHandler } = require('../../src/middleware/jsonErrorHandler');
+const healthRoutes = require("../../src/routes/healthRoutes");
+const userRoutes = require("../../src/routes/userRoutes");
+const errorHandler = require("../../src/middleware/errorHandler");
+const { jsonErrorHandler } = require("../../src/middleware/jsonErrorHandler");
 
 class AppHelper {
   constructor() {
@@ -16,11 +16,11 @@ class AppHelper {
 
   async createTestApp() {
     const app = express();
-    
+
     // Apply same middleware as your main app
     app.use(express.json());
     app.use(jsonErrorHandler);
-    
+
     // Request logging middleware (optional, for debugging)
     if (process.env.NODE_ENV === "development") {
       app.use((req, res, next) => {
@@ -28,11 +28,12 @@ class AppHelper {
         next();
       });
     }
-    
+
     // Add routes
-    app.use('/', healthRoutes);
-    app.use('/', userRoutes);
-    
+    app.use("/", healthRoutes);
+    app.use("/", userRoutes);
+    app.use("/", require("../../src/routes/productRoutes"));
+
     // 404 handler for undefined routes
     app.use((req, res) => {
       res.status(404).json({
@@ -42,10 +43,10 @@ class AppHelper {
         method: req.method,
       });
     });
-    
+
     // Global error handler
     app.use(errorHandler);
-    
+
     this.app = app;
     return app;
   }
@@ -64,7 +65,7 @@ class AppHelper {
     if (this.server) {
       return new Promise((resolve) => {
         this.server.close(() => {
-          console.log('Test server stopped');
+          console.log("Test server stopped");
           resolve();
         });
       });
