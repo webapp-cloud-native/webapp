@@ -21,8 +21,8 @@ describe("User Authentication & Profile API", () => {
   });
 
   beforeEach(async () => {
-    // Clean up any existing test data
-    await TestDatabase.clearData();
+    // Clean up any existing test data using safe method
+    await TestDatabase.safeClearData();
     
     // Create a test user for authentication tests
     testUser = {
@@ -87,6 +87,9 @@ describe("User Authentication & Profile API", () => {
           .get("/v1/user/self")
           .set("Authorization", authHeader)
           .expect(200);
+
+        // Wait a small amount to ensure any potential timing issues
+        await new Promise(resolve => setTimeout(resolve, 10));
 
         const response2 = await appHelper
           .getRequest()
