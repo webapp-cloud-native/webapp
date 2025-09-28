@@ -1,94 +1,157 @@
-const express = require('express');
-const { body, param } = require('express-validator');
-const { createProduct, getProduct, updateProduct, deleteProduct } = require('../controllers/productController');
-const { authenticate } = require('../middleware/auth');
+const express = require("express");
+const { body, param } = require("express-validator");
+const {
+  createProduct,
+  getProduct,
+  updateProduct,
+  deleteProduct,
+} = require("../controllers/productController");
+const { authenticate } = require("../middleware/auth");
 
 const router = express.Router();
 
 // Validation middleware for product creation
 const validateProductCreation = [
-  body('name')
+  body("name")
     .notEmpty()
-    .withMessage('Product name is required')
+    .withMessage("Product name is required")
     .isLength({ min: 1, max: 255 })
-    .withMessage('Product name must be between 1-255 characters')
-    .trim(),
-  body('description')
-    .notEmpty()
-    .withMessage('Product description is required')
-    .isLength({ min: 1, max: 2000 })
-    .withMessage('Product description must be between 1-2000 characters')
-    .trim(),
-  body('sku')
-    .notEmpty()
-    .withMessage('SKU is required')
-    .isLength({ min: 1, max: 100 })
-    .withMessage('SKU must be between 1-100 characters')
-    .trim(),
-  body('manufacturer')
-    .notEmpty()
-    .withMessage('Manufacturer is required')
-    .isLength({ min: 1, max: 255 })
-    .withMessage('Manufacturer must be between 1-255 characters')
-    .trim(),
-  body('quantity')
-    .isInt({ min: 0, max: 100 })
-    .withMessage('Quantity must be an integer between 0 and 100')
+    .withMessage("Product name must be between 1-255 characters")
+    .trim()
     .custom((value) => {
-      if (value % 1 !== 0) {
-        throw new Error('Quantity must be a multiple of 1');
+      if (!value || value.length === 0) {
+        throw new Error("Product name cannot be empty");
       }
       return true;
-    })
+    }),
+  body("description")
+    .notEmpty()
+    .withMessage("Product description is required")
+    .isLength({ min: 1, max: 2000 })
+    .withMessage("Product description must be between 1-2000 characters")
+    .trim()
+    .custom((value) => {
+      if (!value || value.length === 0) {
+        throw new Error("Product description cannot be empty");
+      }
+      return true;
+    }),
+  body("sku")
+    .notEmpty()
+    .withMessage("SKU is required")
+    .isLength({ min: 1, max: 100 })
+    .withMessage("SKU must be between 1-100 characters")
+    .trim()
+    .custom((value) => {
+      if (!value || value.length === 0) {
+        throw new Error("SKU cannot be empty");
+      }
+      return true;
+    }),
+  body("manufacturer")
+    .notEmpty()
+    .withMessage("Manufacturer is required")
+    .isLength({ min: 1, max: 255 })
+    .withMessage("Manufacturer must be between 1-255 characters")
+    .trim()
+    .custom((value) => {
+      if (!value || value.length === 0) {
+        throw new Error("Manufacturer cannot be empty");
+      }
+      return true;
+    }),
+  body("quantity")
+    .isInt({ min: 0, max: 100 })
+    .withMessage("Quantity must be an integer between 0 and 100")
+    .custom((value) => {
+      if (value % 1 !== 0) {
+        throw new Error("Quantity must be a multiple of 1");
+      }
+      return true;
+    }),
 ];
 
 // Validation middleware for product updates
 const validateProductUpdate = [
-  body('name')
+  body("name")
     .optional()
     .notEmpty()
-    .withMessage('Product name cannot be empty')
+    .withMessage("Product name cannot be empty")
     .isLength({ min: 1, max: 255 })
-    .withMessage('Product name must be between 1-255 characters')
-    .trim(),
-  body('description')
-    .optional()
-    .notEmpty()
-    .withMessage('Product description cannot be empty')
-    .isLength({ min: 1, max: 2000 })
-    .withMessage('Product description must be between 1-2000 characters')
-    .trim(),
-  body('sku')
-    .optional()
-    .notEmpty()
-    .withMessage('SKU cannot be empty')
-    .isLength({ min: 1, max: 100 })
-    .withMessage('SKU must be between 1-100 characters')
-    .trim(),
-  body('manufacturer')
-    .optional()
-    .notEmpty()
-    .withMessage('Manufacturer cannot be empty')
-    .isLength({ min: 1, max: 255 })
-    .withMessage('Manufacturer must be between 1-255 characters')
-    .trim(),
-  body('quantity')
-    .optional()
-    .isInt({ min: 0, max: 100 })
-    .withMessage('Quantity must be an integer between 0 and 100')
+    .withMessage("Product name must be between 1-255 characters")
+    .trim()
     .custom((value) => {
-      if (value % 1 !== 0) {
-        throw new Error('Quantity must be a multiple of 1');
+      if (value === "") {
+        throw new Error("Product name cannot be empty");
       }
       return true;
-    })
+    }),
+  body("description")
+    .optional()
+    .notEmpty()
+    .withMessage("Product description cannot be empty")
+    .isLength({ min: 1, max: 2000 })
+    .withMessage("Product description must be between 1-2000 characters")
+    .trim()
+    .custom((value) => {
+      if (value === "") {
+        throw new Error("Product description cannot be empty");
+      }
+      return true;
+    }),
+  body("sku")
+    .optional()
+    .notEmpty()
+    .withMessage("SKU cannot be empty")
+    .isLength({ min: 1, max: 100 })
+    .withMessage("SKU must be between 1-100 characters")
+    .trim()
+    .custom((value) => {
+      if (value === "") {
+        throw new Error("SKU cannot be empty");
+      }
+      return true;
+    }),
+  body("manufacturer")
+    .optional()
+    .notEmpty()
+    .withMessage("Manufacturer cannot be empty")
+    .isLength({ min: 1, max: 255 })
+    .withMessage("Manufacturer must be between 1-255 characters")
+    .trim()
+    .custom((value) => {
+      if (value === "") {
+        throw new Error("Manufacturer cannot be empty");
+      }
+      return true;
+    }),
+  body("quantity")
+    .optional()
+    .isInt({ min: 0, max: 100 })
+    .withMessage("Quantity must be an integer between 0 and 100")
+    .custom((value) => {
+      if (value % 1 !== 0) {
+        throw new Error("Quantity must be a multiple of 1");
+      }
+      return true;
+    }),
 ];
 
-// Product ID validation middleware
+// Product ID validation middleware - FIXED
 const validateProductId = [
-  param('productId')
-    .isInt({ min: 1 })
-    .withMessage('Product ID must be a positive integer')
+  param("productId").custom((value) => {
+    // Check if it's a positive integer
+    const num = parseInt(value, 10);
+    if (
+      isNaN(num) ||
+      num < 1 ||
+      !Number.isInteger(num) ||
+      value !== num.toString()
+    ) {
+      throw new Error("Product ID must be a positive integer");
+    }
+    return true;
+  }),
 ];
 
 /**
@@ -99,16 +162,16 @@ const validateProductId = [
  *     summary: Create a new product
  *     description: |
  *       Create a new product with the provided details. User must be authenticated.
- *       
+ *
  *       **Authentication Required**: HTTP Basic Auth
- *       
+ *
  *       **Validation Rules**:
  *       - Name: 1-255 characters, required
- *       - Description: 1-2000 characters, required  
+ *       - Description: 1-2000 characters, required
  *       - SKU: 1-100 characters, required, must be unique
  *       - Manufacturer: 1-255 characters, required
  *       - Quantity: Integer 0-100, must be multiple of 1
- *       
+ *
  *       **Ownership**: Product is automatically assigned to the authenticated user
  *     security:
  *       - basicAuth: []
@@ -204,7 +267,12 @@ const validateProductId = [
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/v1/product', authenticate, validateProductCreation, createProduct);
+router.post(
+  "/v1/product",
+  authenticate,
+  validateProductCreation,
+  createProduct
+);
 
 /**
  * @swagger
@@ -214,7 +282,7 @@ router.post('/v1/product', authenticate, validateProductCreation, createProduct)
  *     summary: Get product by ID
  *     description: |
  *       Retrieve a product by its unique ID. This is a public endpoint - no authentication required.
- *       
+ *
  *       **Product ID Format**: Must be a positive integer (1, 2, 3, etc.)
  *     parameters:
  *       - in: path
@@ -267,7 +335,7 @@ router.post('/v1/product', authenticate, validateProductCreation, createProduct)
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/v1/product/:productId', validateProductId, getProduct);
+router.get("/v1/product/:productId", validateProductId, getProduct);
 
 /**
  * @swagger
@@ -277,12 +345,12 @@ router.get('/v1/product/:productId', validateProductId, getProduct);
  *     summary: Update product (complete replacement)
  *     description: |
  *       Update a product with new data. Only the product owner can update the product.
- *       
+ *
  *       **Authentication Required**: HTTP Basic Auth
  *       **Ownership Required**: User must be the owner of the product
- *       
+ *
  *       **Update Behavior**: PUT replaces the entire resource - all fields should be provided
- *       
+ *
  *       **Validation Rules**:
  *       - Name: 1-255 characters
  *       - Description: 1-2000 characters
@@ -396,7 +464,13 @@ router.get('/v1/product/:productId', validateProductId, getProduct);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.put('/v1/product/:productId', authenticate, validateProductId, validateProductUpdate, updateProduct);
+router.put(
+  "/v1/product/:productId",
+  authenticate,
+  validateProductId,
+  validateProductUpdate,
+  updateProduct
+);
 
 /**
  * @swagger
@@ -406,12 +480,12 @@ router.put('/v1/product/:productId', authenticate, validateProductId, validatePr
  *     summary: Update product (partial update)
  *     description: |
  *       Partially update a product. Only the product owner can update the product.
- *       
+ *
  *       **Authentication Required**: HTTP Basic Auth
  *       **Ownership Required**: User must be the owner of the product
- *       
+ *
  *       **Update Behavior**: PATCH allows partial updates - only provided fields are updated
- *       
+ *
  *       **Validation Rules** (for provided fields):
  *       - Name: 1-255 characters
  *       - Description: 1-2000 characters
@@ -487,7 +561,13 @@ router.put('/v1/product/:productId', authenticate, validateProductId, validatePr
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.patch('/v1/product/:productId', authenticate, validateProductId, validateProductUpdate, updateProduct);
+router.patch(
+  "/v1/product/:productId",
+  authenticate,
+  validateProductId,
+  validateProductUpdate,
+  updateProduct
+);
 
 /**
  * @swagger
@@ -497,10 +577,10 @@ router.patch('/v1/product/:productId', authenticate, validateProductId, validate
  *     summary: Delete product
  *     description: |
  *       Delete a product permanently. Only the product owner can delete the product.
- *       
+ *
  *       **Authentication Required**: HTTP Basic Auth
  *       **Ownership Required**: User must be the owner of the product
- *       
+ *
  *       **Warning**: This operation is irreversible. The product will be permanently removed.
  *     security:
  *       - basicAuth: []
@@ -556,25 +636,31 @@ router.patch('/v1/product/:productId', authenticate, validateProductId, validate
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.delete('/v1/product/:productId', authenticate, validateProductId, deleteProduct);
+router.delete(
+  "/v1/product/:productId",
+  authenticate,
+  validateProductId,
+  deleteProduct
+);
 
 // Handle method not allowed for product endpoints
-router.all('/v1/product', (req, res) => {
-  if (req.method !== 'POST') {
-    res.set('Allow', 'POST');
+router.all("/v1/product", (req, res) => {
+  if (req.method !== "POST") {
+    res.set("Allow", "POST");
     return res.status(405).json({
-      error: 'Method Not Allowed',
-      message: 'Only POST method is allowed for product creation'
+      error: "Method Not Allowed",
+      message: "Only POST method is allowed for product creation",
     });
   }
 });
 
-router.all('/v1/product/:productId', (req, res) => {
-  if (!['GET', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
-    res.set('Allow', 'GET, PUT, PATCH, DELETE');
+router.all("/v1/product/:productId", (req, res) => {
+  if (!["GET", "PUT", "PATCH", "DELETE"].includes(req.method)) {
+    res.set("Allow", "GET, PUT, PATCH, DELETE");
     return res.status(405).json({
-      error: 'Method Not Allowed',
-      message: 'Only GET, PUT, PATCH, and DELETE methods are allowed for product operations'
+      error: "Method Not Allowed",
+      message:
+        "Only GET, PUT, PATCH, and DELETE methods are allowed for product operations",
     });
   }
 });
