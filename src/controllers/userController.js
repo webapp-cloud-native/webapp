@@ -137,16 +137,25 @@ const updateUser = async (req, res) => {
 
     // Update user
     await user.update(updateData);
-    await user.reload(); // Reload to get updated timestamps
+    
+    // Fetch the updated user from database to ensure we have latest data
+    const updatedUser = await User.findByPk(user.id);
+    
+    if (!updatedUser) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'User not found'
+      });
+    }
 
     // Return updated user data without password
     const userResponse = {
-      id: user.id,
-      email: user.email,
-      first_name: user.first_name,
-      last_name: user.last_name,
-      account_created: user.account_created,
-      account_updated: user.account_updated
+      id: updatedUser.id,
+      email: updatedUser.email,
+      first_name: updatedUser.first_name,
+      last_name: updatedUser.last_name,
+      account_created: updatedUser.account_created,
+      account_updated: updatedUser.account_updated
     };
 
     res.status(200).json(userResponse);

@@ -71,6 +71,11 @@ class TestDatabase {
       return 0;
     }
   }
+
+  // Use the same method as clearData - it was working correctly
+  static async safeClearData() {
+    await this.clearData();
+  }
 }
 
 module.exports = TestDatabase;

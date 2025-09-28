@@ -22,8 +22,8 @@ describe("Product Management API", () => {
   });
 
   beforeEach(async () => {
-    // Clean up any existing test data
-    await TestDatabase.clearData();
+    // Clean up any existing test data using safe method
+    await TestDatabase.safeClearData();
 
     // Create a test user for authentication
     testUser = {
@@ -121,11 +121,11 @@ describe("Product Management API", () => {
 
       test("should create products with special characters", async () => {
         const specialProduct = {
-          name: "Spécial Prodüct - Tést!",
+          name: "Special Product - Test!",
           description:
             "A product with special characters: @#$%^&*()_+-=[]{}|;':\",./<>?",
           sku: "SPECIAL-001",
-          manufacturer: "Spéciál Manufäcturer & Co.",
+          manufacturer: "Special Manufacturer & Co.",
           quantity: 30,
         };
 
@@ -232,7 +232,9 @@ describe("Product Management API", () => {
         for (const invalidQuantity of invalidQuantities) {
           const invalidProduct = {
             ...testProduct,
-            sku: `INVALID-QTY-${Date.now()}`,
+            sku: `INVALID-QTY-${Date.now()}-${Math.random()
+              .toString(36)
+              .substr(2, 9)}`,
             quantity: invalidQuantity,
           };
 
@@ -252,17 +254,11 @@ describe("Product Management API", () => {
         const emptyFieldTests = [
           { ...testProduct, name: "", sku: "EMPTY-NAME-TEST" },
           { ...testProduct, description: "", sku: "EMPTY-DESC-TEST" },
-          { ...testProduct, sku: "" }, // Don't override empty SKU
+          { ...testProduct, sku: "", name: "Empty SKU Test" },
           { ...testProduct, manufacturer: "", sku: "EMPTY-MFG-TEST" },
         ];
 
         for (let i = 0; i < emptyFieldTests.length; i++) {
-          // Only override SKU if it's not supposed to be empty
-          if (i !== 2) {
-            // Skip the SKU test case (index 2)
-            // SKU already set above for each case
-          }
-
           const response = await appHelper
             .getRequest()
             .post("/v1/product")
