@@ -21,13 +21,10 @@ describe("Product Management API", () => {
     await TestDatabase.cleanup();
   });
 
-  beforeEach(async () => {
-    // Clean up any existing test data using safe method
-    await TestDatabase.safeClearData();
-
-    // Create a test user for authentication
+  // Helper function to create a test user
+  async function createTestUser() {
     testUser = {
-      email: "productowner@example.com",
+      email: `productowner-${Date.now()}@example.com`, // Unique email each time
       password: "ProductPass123!",
       first_name: "Product",
       last_name: "Owner",
@@ -44,11 +41,21 @@ describe("Product Management API", () => {
       "Basic " +
       Buffer.from(`${testUser.email}:${testUser.password}`).toString("base64");
 
+    return { userId, authHeader };
+  }
+
+  beforeEach(async () => {
+    // Clean up any existing test data
+    await TestDatabase.safeClearData();
+
+    // Create a fresh test user for each test
+    await createTestUser();
+
     // Test product data template
     testProduct = {
       name: "Test Widget",
       description: "A high-quality test widget for testing purposes",
-      sku: "TEST-WIDGET-001",
+      sku: `TEST-WIDGET-${Date.now()}`, // Unique SKU each time
       manufacturer: "Test Manufacturing Corp",
       quantity: 50,
     };
@@ -82,7 +89,7 @@ describe("Product Management API", () => {
           const productData = {
             ...testProduct,
             name: `Quantity Test Product ${i}`,
-            sku: `QTY-TEST-${i.toString().padStart(3, "0")}`,
+            sku: `QTY-TEST-${Date.now()}-${i}`,
             quantity: quantities[i],
           };
 
@@ -101,7 +108,7 @@ describe("Product Management API", () => {
         const maxLengthProduct = {
           name: "a".repeat(255),
           description: "b".repeat(2000),
-          sku: "c".repeat(100),
+          sku: `MAX-${Date.now()}`,
           manufacturer: "d".repeat(255),
           quantity: 25,
         };
@@ -124,7 +131,7 @@ describe("Product Management API", () => {
           name: "Special Product - Test!",
           description:
             "A product with special characters: @#$%^&*()_+-=[]{}|;':\",./<>?",
-          sku: "SPECIAL-001",
+          sku: `SPECIAL-${Date.now()}`,
           manufacturer: "Special Manufacturer & Co.",
           quantity: 30,
         };
@@ -252,10 +259,10 @@ describe("Product Management API", () => {
 
       test("should return 400 for empty required fields", async () => {
         const emptyFieldTests = [
-          { ...testProduct, name: "", sku: "EMPTY-NAME-TEST" },
-          { ...testProduct, description: "", sku: "EMPTY-DESC-TEST" },
+          { ...testProduct, name: "", sku: `EMPTY-NAME-${Date.now()}` },
+          { ...testProduct, description: "", sku: `EMPTY-DESC-${Date.now()}` },
           { ...testProduct, sku: "", name: "Empty SKU Test" },
-          { ...testProduct, manufacturer: "", sku: "EMPTY-MFG-TEST" },
+          { ...testProduct, manufacturer: "", sku: `EMPTY-MFG-${Date.now()}` },
         ];
 
         for (let i = 0; i < emptyFieldTests.length; i++) {
@@ -297,7 +304,7 @@ describe("Product Management API", () => {
     let createdProductId;
 
     beforeEach(async () => {
-      // Create a product for testing
+      // Create a product for testing (user already exists from main beforeEach)
       const response = await appHelper
         .getRequest()
         .post("/v1/product")
@@ -369,7 +376,7 @@ describe("Product Management API", () => {
     let otherAuthHeader;
 
     beforeEach(async () => {
-      // Create a product for testing
+      // Create a product for testing (user already exists from main beforeEach)
       const response = await appHelper
         .getRequest()
         .post("/v1/product")
@@ -381,7 +388,7 @@ describe("Product Management API", () => {
 
       // Create another user for ownership tests
       otherUser = {
-        email: "other@example.com",
+        email: `other-${Date.now()}@example.com`,
         password: "OtherPass123!",
         first_name: "Other",
         last_name: "User",
@@ -401,7 +408,7 @@ describe("Product Management API", () => {
         const updateData = {
           name: "Updated Widget",
           description: "Updated description with new features",
-          sku: "UPDATED-WIDGET-001",
+          sku: `UPDATED-WIDGET-${Date.now()}`,
           manufacturer: "Updated Manufacturing Inc",
           quantity: 75,
         };
@@ -470,7 +477,7 @@ describe("Product Management API", () => {
         const updateData = {
           name: "Unauthorized Update",
           description: testProduct.description,
-          sku: "UNAUTHORIZED-001",
+          sku: `UNAUTHORIZED-${Date.now()}`,
           manufacturer: testProduct.manufacturer,
           quantity: testProduct.quantity,
         };
@@ -513,10 +520,10 @@ describe("Product Management API", () => {
         const anotherProduct = {
           ...testProduct,
           name: "Another Product",
-          sku: "ANOTHER-001",
+          sku: `ANOTHER-${Date.now()}`,
         };
 
-        await appHelper
+        const another = await appHelper
           .getRequest()
           .post("/v1/product")
           .set("Authorization", authHeader)
@@ -527,7 +534,7 @@ describe("Product Management API", () => {
         const updateData = {
           name: testProduct.name,
           description: testProduct.description,
-          sku: "ANOTHER-001", // Duplicate SKU
+          sku: another.body.sku, // Use the actual SKU from second product
           manufacturer: testProduct.manufacturer,
           quantity: testProduct.quantity,
         };
@@ -549,7 +556,7 @@ describe("Product Management API", () => {
         const updateData = {
           name: "Valid Name",
           description: "Valid description",
-          sku: "VALID-001",
+          sku: `VALID-${Date.now()}`,
           manufacturer: "Valid Manufacturer",
           quantity: 50,
           id: 99999, // Forbidden field
@@ -640,7 +647,7 @@ describe("Product Management API", () => {
 
       // Create another user for ownership tests
       const otherUser = {
-        email: "deleter@example.com",
+        email: `deleter-${Date.now()}@example.com`,
         password: "DeletePass123!",
         first_name: "Delete",
         last_name: "User",
