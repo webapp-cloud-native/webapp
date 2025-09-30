@@ -3,7 +3,7 @@ const { User } = require("../models/User");
 /**
  * Parse Basic Authentication header
  * @param {string} authHeader - The Authorization header value
- * @returns {Object|null} - { email, password } or null if invalid
+ * @returns {Object|null} - { username, password } or null if invalid
  */
 function parseBasicAuth(authHeader) {
   if (!authHeader || !authHeader.startsWith("Basic ")) {
@@ -17,14 +17,14 @@ function parseBasicAuth(authHeader) {
       "ascii"
     );
 
-    // Split email:password
-    const [email, password] = credentials.split(":");
+    // Split username:password
+    const [username, password] = credentials.split(":");
 
-    if (!email || !password) {
+    if (!username || !password) {
       return null;
     }
 
-    return { email, password };
+    return { username, password };
   } catch (error) {
     console.error("Error parsing basic auth:", error);
     return null;
@@ -32,15 +32,15 @@ function parseBasicAuth(authHeader) {
 }
 
 /**
- * Authenticate user with email and password
- * @param {string} email - User email
+ * Authenticate user with username (email) and password
+ * @param {string} username - User username (email address)
  * @param {string} password - User password
  * @returns {Object|null} - User object or null if authentication fails
  */
-async function authenticateUser(email, password) {
+async function authenticateUser(username, password) {
   try {
-    // Find user by email
-    const user = await User.findByEmail(email);
+    // Find user by username
+    const user = await User.findByUsername(username);
     if (!user) {
       return null;
     }
@@ -71,7 +71,7 @@ async function authenticateFromHeader(authHeader) {
   }
 
   // Authenticate user
-  return await authenticateUser(credentials.email, credentials.password);
+  return await authenticateUser(credentials.username, credentials.password);
 }
 
 module.exports = {
