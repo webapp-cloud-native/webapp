@@ -1,7 +1,6 @@
 # Cloud-Native Web Application
 
-A cloud-native RESTful API backend built with Node.js, Express.js, PostgreSQL, with comprehensive integration testing and CI/CD pipeline.
-
+RESTful API backend with Node.js, Express.js, PostgreSQL, comprehensive integration testing, and CI/CD pipeline.
 
 ## Prerequisites
 
@@ -30,6 +29,8 @@ A cloud-native RESTful API backend built with Node.js, Express.js, PostgreSQL, w
 - **supertest**: ^6.3.4
 - **cross-env**: ^7.0.3
 
+---
+
 ## Step-by-Step Build Instructions
 
 ### 1. Repository Setup
@@ -50,26 +51,32 @@ psql -U postgres -h localhost
 
 # Create user with CREATEDB privileges
 CREATE USER your_username WITH PASSWORD 'your_password' CREATEDB;
-CREATE DATABASE your_username;
+
+# Create development database
+CREATE DATABASE webapp_db;
+GRANT ALL PRIVILEGES ON DATABASE webapp_db TO your_username;
+
+# Create test database
 CREATE DATABASE webapp_test;
 GRANT ALL PRIVILEGES ON DATABASE webapp_test TO your_username;
+
 \q
 ```
 
 ### 4. Environment Configuration
 
-**Development (.env):**
+Create `.env` file in project root:
 ```env
+NODE_ENV=development
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=webapp_db
 DB_USER=your_username
 DB_PASSWORD=your_password
 PORT=8080
-NODE_ENV=development
 ```
 
-**Testing (.env.test):**
+Create `.env.test` file in project root:
 ```env
 NODE_ENV=test
 DB_HOST=localhost
@@ -77,49 +84,75 @@ DB_PORT=5432
 DB_NAME=webapp_test
 DB_USER=your_username
 DB_PASSWORD=your_password
+PORT=8080
 ```
 
-### 5. Build and Start Application
+**Important:** Replace `your_username` and `your_password` with actual PostgreSQL credentials.
+
+### 5. Start Application
 ```bash
 npm start
 ```
 
-The application automatically creates databases and tables on startup.
+Application automatically creates tables and schema on startup.
+
+---
 
 ## Testing Procedures and Commands
 
-### Run Tests
+### Run Integration Tests
 ```bash
-# Complete test suite (84 integration tests)
+# Run all 84 integration tests
 npm test
 
-# Watch mode for development
+# Run with watch mode
 npm run test:watch
 
-# Coverage report
+# Generate coverage report
 npm run test:coverage
 ```
+
+### Test Configuration
+- **Test Framework:** Jest 29.7.0
+- **HTTP Testing:** SuperTest 6.3.4
+- **Test Database:** Separate `webapp_test` database
+- **Execution:** Serial (maxWorkers: 1) for database isolation
+- **Timeout:** 30 seconds per test
+
+### Test Coverage
+- Health check endpoints (12 tests)
+- User management and authentication (50 tests)
+- Product CRUD operations (22 tests)
+- Total: 84 integration tests
 
 ### Manual API Testing
 ```bash
 # Health check
 curl http://127.0.0.1:8080/healthz
 
-# User registration
+# Create user
 curl -X POST http://127.0.0.1:8080/v1/user \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"SecurePass123!","first_name":"John","last_name":"Doe"}'
+  -d '{
+    "username":"test@example.com",
+    "password":"SecurePass123!",
+    "first_name":"John",
+    "last_name":"Doe"
+  }'
 
-# Authentication test
+# Get user (authenticated)
 AUTH=$(echo -n "test@example.com:SecurePass123!" | base64)
-curl -H "Authorization: Basic $AUTH" http://127.0.0.1:8080/v1/user/self
+curl -H "Authorization: Basic $AUTH" \
+  http://127.0.0.1:8080/v1/user/1
 ```
+
+---
 
 ## Deployment Instructions
 
 ### Local Development
 ```bash
-# Ensure PostgreSQL is running
+# Start PostgreSQL
 brew services start postgresql@14  # macOS
 sudo systemctl start postgresql    # Linux
 
@@ -127,68 +160,92 @@ sudo systemctl start postgresql    # Linux
 npm start
 ```
 
-### Environment Variables Required
+### Required Environment Variables
 - `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
 - `PORT` (defaults to 8080)
 - `NODE_ENV` (development/test/production)
 
-## Directory Structure
-
-```
-webapp/
-├── .github/workflows/ci.yml         # CI/CD pipeline
-├── src/
-│   ├── config/                     # Database & Swagger configuration
-│   ├── controllers/                # Business logic (health, user, product)
-│   ├── middleware/                 # Auth, validation, error handling
-│   ├── models/                     # Data models (User, Product, HealthCheck)
-│   ├── routes/                     # API route definitions
-│   └── services/                   # Auth & database services
-├── tests/
-│   ├── config/                     # Test database configuration
-│   ├── helpers/                    # Test utilities
-│   └── integration/                # Integration tests (health, user, product)
-├── server.js                       # Application entry point
-├── package.json                    # Dependencies and scripts
-├── jest.config.js                  # Test configuration
-├── .env.test                       # Test environment variables
-└── README.md                       # This file
-```
+---
 
 ## API Endpoints
 
 ### Health Check
-- `GET /healthz` - Database connectivity test
+- `GET /healthz` - Database connectivity test (200/503)
 
 ### User Management  
-- `POST /v1/user` - User registration
-- `GET /v1/user/self` - Get user profile (auth required)
-- `PUT /v1/user/self` - Update user profile (auth required)
+- `POST /v1/user` - User registration (201)
+- `GET /v1/user/:userId` - Get user profile (200, auth required)
+- `PUT /v1/user/:userId` - Update user profile (204, auth required)
 
 ### Product Management
-- `POST /v1/product` - Create product (auth required)
-- `GET /v1/product/{id}` - Get product by ID
-- `PUT/PATCH /v1/product/{id}` - Update product (auth + ownership required)
-- `DELETE /v1/product/{id}` - Delete product (auth + ownership required)
+- `POST /v1/product` - Create product (201, auth required)
+- `GET /v1/product/:productId` - Get product (200, public)
+- `PUT /v1/product/:productId` - Update product (200, owner only)
+- `PATCH /v1/product/:productId` - Partial update (200, owner only)
+- `DELETE /v1/product/:productId` - Delete product (204, owner only)
 
 ### Documentation
-- `GET /api-docs` - Swagger UI interface
+- `GET /api-docs` - Swagger UI
+
+---
+
+## CI/CD Pipeline
+
+### GitHub Actions Workflow
+**File:** `.github/workflows/ci.yml`
+
+**Triggers:** Pull requests to `main` branch
+
+**Steps:**
+1. Checkout code
+2. Setup Node.js 18
+3. Install dependencies
+4. Start PostgreSQL service
+5. Run integration tests
+
+**Environment:**
+- Ubuntu latest
+- PostgreSQL 14
+- Node.js 18
+
+### Branch Protection
+- Pull request required before merging
+- CI tests must pass
+- Branches must be up to date
+- Applies to administrators
+
+---
 
 ## Technology Stack
 
-- **Backend**: Node.js 18+ with Express.js 5.1.0
-- **Database**: PostgreSQL 14+ with Sequelize ORM 6.37.7
-- **Authentication**: HTTP Basic Auth with BCrypt password hashing
-- **Testing**: Jest 29.7.0 with SuperTest for integration testing
-- **CI/CD**: GitHub Actions with automated testing pipeline
-- **Documentation**: Swagger/OpenAPI 3.0 specification
+- **Backend:** Node.js 18+ with Express.js 5.1.0
+- **Database:** PostgreSQL 14+ with Sequelize ORM 6.37.7
+- **Authentication:** HTTP Basic Auth with BCrypt password hashing
+- **Testing:** Jest 29.7.0 with SuperTest integration testing
+- **CI/CD:** GitHub Actions with automated testing
+- **Documentation:** Swagger/OpenAPI 3.0
 
-## Assignment Compliance
+---
 
-This implementation satisfies all requirements for Assignments 1-3:
-- Automatic database bootstrapping with zero manual intervention
-- RESTful API endpoints with proper HTTP status codes
-- BCrypt password security with salt
-- Comprehensive integration testing (84 tests)
-- GitHub Actions CI/CD pipeline with branch protection
-- Production-ready error handling and validation
+## Project Structure
+
+```
+webapp/
+├── .github/workflows/ci.yml       # CI/CD pipeline
+├── src/
+│   ├── config/                    # Database & Swagger config
+│   ├── controllers/               # Business logic
+│   ├── middleware/                # Auth, validation, errors
+│   ├── models/                    # Data models
+│   ├── routes/                    # API routes
+│   └── services/                  # Auth & database services
+├── tests/
+│   ├── config/                    # Test configuration
+│   ├── helpers/                   # Test utilities
+│   └── integration/               # Integration tests (84 tests)
+├── .env                           # Development config (not in git)
+├── .env.test                      # Test config (not in git)
+├── jest.config.js                 # Jest configuration
+├── package.json                   # Dependencies
+└── server.js                      # Application entry point
+```
