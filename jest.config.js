@@ -5,6 +5,5 @@ module.exports = {
   setupFilesAfterEnv: ["<rootDir>/tests/config/test-setup.js"],
   testTimeout: 30000,
   verbose: true,
-  // Run tests serially to avoid database conflicts
-  maxWorkers: 1,
+  maxWorkers: 1, // ← MUST BE 1 for serial execution
 };
