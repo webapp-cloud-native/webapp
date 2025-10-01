@@ -25,7 +25,7 @@ describe("User Management API", () => {
 
     // Create a base test user for authentication tests
     testUser = {
-      email: "test@example.com",
+      username: "test@example.com",
       password: "TestPass123!",
       first_name: "Test",
       last_name: "User",
@@ -34,14 +34,16 @@ describe("User Management API", () => {
     // Generate auth header for authenticated requests
     authHeader =
       "Basic " +
-      Buffer.from(`${testUser.email}:${testUser.password}`).toString("base64");
+      Buffer.from(`${testUser.username}:${testUser.password}`).toString(
+        "base64"
+      );
   });
 
   describe("POST /v1/user - Create User", () => {
     describe("Positive Test Cases", () => {
       test("should create user with valid data", async () => {
         const userData = {
-          email: "john.doe@example.com",
+          username: "john.doe@example.com",
           password: "SecurePass123!",
           first_name: "John",
           last_name: "Doe",
@@ -54,7 +56,7 @@ describe("User Management API", () => {
           .expect(201);
 
         expect(response.body).toHaveProperty("id");
-        expect(response.body.email).toBe(userData.email);
+        expect(response.body.username).toBe(userData.username);
         expect(response.body.first_name).toBe(userData.first_name);
         expect(response.body.last_name).toBe(userData.last_name);
         expect(response.body).toHaveProperty("account_created");
@@ -74,7 +76,7 @@ describe("User Management API", () => {
 
         for (let i = 0; i < validEmails.length; i++) {
           const userData = {
-            email: validEmails[i],
+            username: validEmails[i],
             password: "TestPass123!",
             first_name: "Test",
             last_name: `User${i}`,
@@ -86,13 +88,13 @@ describe("User Management API", () => {
             .send(userData)
             .expect(201);
 
-          expect(response.body.email).toBe(validEmails[i]);
+          expect(response.body.username).toBe(validEmails[i]);
         }
       });
 
       test("should create user with minimum valid name lengths", async () => {
         const userData = {
-          email: "min@example.com",
+          username: "min@example.com",
           password: "MinPass123!",
           first_name: "A",
           last_name: "B",
@@ -110,7 +112,7 @@ describe("User Management API", () => {
 
       test("should create user with maximum valid name lengths", async () => {
         const userData = {
-          email: "max@example.com",
+          username: "max@example.com",
           password: "MaxPass123!",
           first_name: "a".repeat(100), // 100 characters
           last_name: "b".repeat(100), // 100 characters
@@ -128,7 +130,7 @@ describe("User Management API", () => {
     });
 
     describe("Negative Test Cases", () => {
-      test("should return 400 for duplicate email", async () => {
+      test("should return 400 for duplicate username", async () => {
         // Create first user
         await appHelper
           .getRequest()
@@ -136,9 +138,9 @@ describe("User Management API", () => {
           .send(testUser)
           .expect(201);
 
-        // Attempt to create second user with same email
+        // Attempt to create second user with same username
         const duplicateUser = {
-          email: testUser.email,
+          username: testUser.username,
           password: "DifferentPass123!",
           first_name: "Different",
           last_name: "User",
@@ -152,7 +154,7 @@ describe("User Management API", () => {
 
         expect(response.body.error).toBe("Bad Request");
         expect(response.body.message).toBe(
-          "User with this email already exists"
+          "User with this username already exists"
         );
       });
 
@@ -168,7 +170,7 @@ describe("User Management API", () => {
 
         for (const invalidEmail of invalidEmails) {
           const userData = {
-            email: invalidEmail,
+            username: invalidEmail,
             password: "TestPass123!",
             first_name: "Test",
             last_name: "User",
@@ -196,7 +198,7 @@ describe("User Management API", () => {
 
         for (const weakPassword of weakPasswords) {
           const userData = {
-            email: `test${Date.now()}@example.com`,
+            username: `test${Date.now()}@example.com`,
             password: weakPassword,
             first_name: "Test",
             last_name: "User",
@@ -215,15 +217,19 @@ describe("User Management API", () => {
 
       test("should return 400 for missing required fields", async () => {
         const testCases = [
-          { password: "TestPass123!", first_name: "Test", last_name: "User" }, // Missing email
-          { email: "test@example.com", first_name: "Test", last_name: "User" }, // Missing password
+          { password: "TestPass123!", first_name: "Test", last_name: "User" }, // Missing username
           {
-            email: "test@example.com",
+            username: "test@example.com",
+            first_name: "Test",
+            last_name: "User",
+          }, // Missing password
+          {
+            username: "test@example.com",
             password: "TestPass123!",
             last_name: "User",
           }, // Missing first_name
           {
-            email: "test@example.com",
+            username: "test@example.com",
             password: "TestPass123!",
             first_name: "Test",
           }, // Missing last_name
@@ -244,7 +250,7 @@ describe("User Management API", () => {
 
       test("should return 400 for empty name fields", async () => {
         const userData = {
-          email: "test@example.com",
+          username: "test@example.com",
           password: "TestPass123!",
           first_name: "",
           last_name: "",
@@ -262,7 +268,7 @@ describe("User Management API", () => {
 
       test("should return 400 for name fields exceeding maximum length", async () => {
         const userData = {
-          email: "test@example.com",
+          username: "test@example.com",
           password: "TestPass123!",
           first_name: "a".repeat(101), // 101 characters - exceeds limit
           last_name: "b".repeat(101), // 101 characters - exceeds limit
@@ -280,7 +286,7 @@ describe("User Management API", () => {
 
       test("should ignore read-only fields in request", async () => {
         const userData = {
-          email: "test@example.com",
+          username: "test@example.com",
           password: "TestPass123!",
           first_name: "Test",
           last_name: "User",
@@ -308,7 +314,7 @@ describe("User Management API", () => {
     describe("Edge Case Tests", () => {
       test("should handle special characters in names", async () => {
         const userData = {
-          email: "special@example.com",
+          username: "special@example.com",
           password: "SpecialPass123!",
           first_name: "José María",
           last_name: "García-López",
@@ -328,7 +334,7 @@ describe("User Management API", () => {
         const users = Array(5)
           .fill()
           .map((_, i) => ({
-            email: `concurrent${i}@example.com`,
+            username: `concurrent${i}@example.com`,
             password: "ConcurrentPass123!",
             first_name: `User${i}`,
             last_name: "Test",
@@ -342,7 +348,7 @@ describe("User Management API", () => {
 
         responses.forEach((response, index) => {
           expect(response.status).toBe(201);
-          expect(response.body.email).toBe(users[index].email);
+          expect(response.body.username).toBe(users[index].username);
         });
       });
     });
@@ -367,7 +373,7 @@ describe("User Management API", () => {
   describe("Database Verification Tests", () => {
     test("should store password securely with BCrypt", async () => {
       const userData = {
-        email: "bcrypt@example.com",
+        username: "bcrypt@example.com",
         password: "TestPassword123!",
         first_name: "BCrypt",
         last_name: "Test",
@@ -376,7 +382,7 @@ describe("User Management API", () => {
       await appHelper.getRequest().post("/v1/user").send(userData).expect(201);
 
       // Verify password is hashed in database
-      const user = await User.findByEmail(userData.email);
+      const user = await User.findByUsername(userData.username);
       expect(user).toBeTruthy();
       expect(user.password).not.toBe(userData.password);
       expect(user.password).toMatch(/^\$2[ab]\$\d{2}\$/); // BCrypt hash pattern
@@ -393,7 +399,7 @@ describe("User Management API", () => {
       const beforeCreation = new Date();
 
       const userData = {
-        email: "timestamp@example.com",
+        username: "timestamp@example.com",
         password: "TimestampPass123!",
         first_name: "Timestamp",
         last_name: "Test",

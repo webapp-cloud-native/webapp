@@ -26,7 +26,7 @@ describe("User Authentication & Profile API", () => {
 
     // Create a fresh test user for authentication tests
     testUser = {
-      email: `auth-${Date.now()}@example.com`, // Unique email
+      username: `auth-${Date.now()}@example.com`,
       password: "AuthPass123!",
       first_name: "Auth",
       last_name: "User",
@@ -44,20 +44,22 @@ describe("User Authentication & Profile API", () => {
     // Generate auth header for authenticated requests
     authHeader =
       "Basic " +
-      Buffer.from(`${testUser.email}:${testUser.password}`).toString("base64");
+      Buffer.from(`${testUser.username}:${testUser.password}`).toString(
+        "base64"
+      );
   });
 
-  describe("GET /v1/user/self - Get User Information", () => {
+  describe("GET /v1/user/:userId - Get User Information", () => {
     describe("Positive Test Cases", () => {
       test("should return user information with valid authentication", async () => {
         const response = await appHelper
           .getRequest()
-          .get("/v1/user/self")
+          .get(`/v1/user/${userId}`)
           .set("Authorization", authHeader)
           .expect(200);
 
         expect(response.body).toHaveProperty("id", userId);
-        expect(response.body.email).toBe(testUser.email);
+        expect(response.body.username).toBe(testUser.username);
         expect(response.body.first_name).toBe(testUser.first_name);
         expect(response.body.last_name).toBe(testUser.last_name);
         expect(response.body).toHaveProperty("account_created");
@@ -70,7 +72,7 @@ describe("User Authentication & Profile API", () => {
       test("should return correct timestamps", async () => {
         const response = await appHelper
           .getRequest()
-          .get("/v1/user/self")
+          .get(`/v1/user/${userId}`)
           .set("Authorization", authHeader)
           .expect(200);
 
@@ -90,7 +92,7 @@ describe("User Authentication & Profile API", () => {
       test("should return consistent data on multiple calls", async () => {
         const response1 = await appHelper
           .getRequest()
-          .get("/v1/user/self")
+          .get(`/v1/user/${userId}`)
           .set("Authorization", authHeader)
           .expect(200);
 
@@ -99,7 +101,7 @@ describe("User Authentication & Profile API", () => {
 
         const response2 = await appHelper
           .getRequest()
-          .get("/v1/user/self")
+          .get(`/v1/user/${userId}`)
           .set("Authorization", authHeader)
           .expect(200);
 
@@ -111,7 +113,7 @@ describe("User Authentication & Profile API", () => {
       test("should return 401 for missing authentication", async () => {
         const response = await appHelper
           .getRequest()
-          .get("/v1/user/self")
+          .get(`/v1/user/${userId}`)
           .expect(401);
 
         expect(response.body.error).toBe("Unauthorized");
@@ -127,7 +129,7 @@ describe("User Authentication & Profile API", () => {
 
         const response = await appHelper
           .getRequest()
-          .get("/v1/user/self")
+          .get(`/v1/user/${userId}`)
           .set("Authorization", invalidAuthHeader)
           .expect(401);
 
@@ -146,7 +148,7 @@ describe("User Authentication & Profile API", () => {
         for (const header of malformedHeaders) {
           const response = await appHelper
             .getRequest()
-            .get("/v1/user/self")
+            .get(`/v1/user/${userId}`)
             .set("Authorization", header)
             .expect(401);
 
@@ -163,7 +165,7 @@ describe("User Authentication & Profile API", () => {
 
         const response = await appHelper
           .getRequest()
-          .get("/v1/user/self")
+          .get(`/v1/user/${userId}`)
           .set("Authorization", nonExistentAuthHeader)
           .expect(401);
 
@@ -172,13 +174,13 @@ describe("User Authentication & Profile API", () => {
     });
 
     describe("Method Not Allowed Tests", () => {
-      test("should return 405 for unsupported methods on /v1/user/self", async () => {
+      test("should return 405 for unsupported methods on /v1/user/:userId", async () => {
         const unsupportedMethods = ["POST", "PATCH", "DELETE"];
 
         for (const method of unsupportedMethods) {
           const response = await appHelper
             .getRequest()
-            [method.toLowerCase()]("/v1/user/self")
+            [method.toLowerCase()](`/v1/user/${userId}`)
             .set("Authorization", authHeader)
             .expect(405);
 
@@ -189,116 +191,131 @@ describe("User Authentication & Profile API", () => {
     });
   });
 
-  describe("PUT /v1/user/self - Update User Information", () => {
+  describe("PUT /v1/user/:userId - Update User Information", () => {
     describe("Positive Test Cases", () => {
-      test("should update first_name successfully", async () => {
+      test("should update first_name successfully with 204 response", async () => {
         const updateData = {
           first_name: "UpdatedAuth",
         };
 
-        const response = await appHelper
+        await appHelper
           .getRequest()
-          .put("/v1/user/self")
+          .put(`/v1/user/${userId}`)
           .set("Authorization", authHeader)
           .send(updateData)
+          .expect(204);
+
+        // Verify the update by fetching user
+        const verifyResponse = await appHelper
+          .getRequest()
+          .get(`/v1/user/${userId}`)
+          .set("Authorization", authHeader)
           .expect(200);
 
-        expect(response.body.first_name).toBe("UpdatedAuth");
-        expect(response.body.last_name).toBe(testUser.last_name); // Unchanged
-        expect(response.body.email).toBe(testUser.email); // Unchanged
-        expect(response.body).not.toHaveProperty("password");
+        expect(verifyResponse.body.first_name).toBe("UpdatedAuth");
+        expect(verifyResponse.body.last_name).toBe(testUser.last_name);
+        expect(verifyResponse.body.username).toBe(testUser.username);
+        expect(verifyResponse.body).not.toHaveProperty("password");
 
         // Verify account_updated timestamp changed
         expect(
-          new Date(response.body.account_updated).getTime()
-        ).toBeGreaterThan(new Date(response.body.account_created).getTime());
+          new Date(verifyResponse.body.account_updated).getTime()
+        ).toBeGreaterThan(
+          new Date(verifyResponse.body.account_created).getTime()
+        );
       });
 
-      test("should update last_name successfully", async () => {
+      test("should update last_name successfully with 204 response", async () => {
         const updateData = {
           last_name: "UpdatedUser",
         };
 
-        const response = await appHelper
+        await appHelper
           .getRequest()
-          .put("/v1/user/self")
+          .put(`/v1/user/${userId}`)
           .set("Authorization", authHeader)
           .send(updateData)
+          .expect(204);
+
+        // Verify the update by fetching user
+        const verifyResponse = await appHelper
+          .getRequest()
+          .get(`/v1/user/${userId}`)
+          .set("Authorization", authHeader)
           .expect(200);
 
-        expect(response.body.last_name).toBe("UpdatedUser");
-        expect(response.body.first_name).toBe(testUser.first_name); // Unchanged
+        expect(verifyResponse.body.last_name).toBe("UpdatedUser");
+        expect(verifyResponse.body.first_name).toBe(testUser.first_name);
       });
 
-      test("should update password successfully", async () => {
+      test("should update password successfully with 204 response", async () => {
         const updateData = {
           password: "NewSecurePass456!",
         };
 
-        const response = await appHelper
+        await appHelper
           .getRequest()
-          .put("/v1/user/self")
+          .put(`/v1/user/${userId}`)
           .set("Authorization", authHeader)
           .send(updateData)
-          .expect(200);
-
-        // Password should not be in response
-        expect(response.body).not.toHaveProperty("password");
+          .expect(204);
 
         // Verify old password no longer works
         const oldAuthHeader =
           "Basic " +
-          Buffer.from(`${testUser.email}:${testUser.password}`).toString(
+          Buffer.from(`${testUser.username}:${testUser.password}`).toString(
             "base64"
           );
         await appHelper
           .getRequest()
-          .get("/v1/user/self")
+          .get(`/v1/user/${userId}`)
           .set("Authorization", oldAuthHeader)
           .expect(401);
 
         // Verify new password works
         const newAuthHeader =
           "Basic " +
-          Buffer.from(`${testUser.email}:${updateData.password}`).toString(
+          Buffer.from(`${testUser.username}:${updateData.password}`).toString(
             "base64"
           );
-        await appHelper
+        const verifyResponse = await appHelper
           .getRequest()
-          .get("/v1/user/self")
+          .get(`/v1/user/${userId}`)
           .set("Authorization", newAuthHeader)
           .expect(200);
+
+        expect(verifyResponse.body).not.toHaveProperty("password");
       });
 
-      test("should update multiple fields at once", async () => {
+      test("should update multiple fields at once with 204 response", async () => {
         const updateData = {
           first_name: "Multi",
           last_name: "Update",
           password: "MultiUpdate123!",
         };
 
-        const response = await appHelper
-          .getRequest()
-          .put("/v1/user/self")
-          .set("Authorization", authHeader)
-          .send(updateData)
-          .expect(200);
-
-        expect(response.body.first_name).toBe("Multi");
-        expect(response.body.last_name).toBe("Update");
-        expect(response.body).not.toHaveProperty("password");
-
-        // Verify new password works
-        const newAuthHeader =
-          "Basic " +
-          Buffer.from(`${testUser.email}:${updateData.password}`).toString(
-            "base64"
-          );
         await appHelper
           .getRequest()
-          .get("/v1/user/self")
+          .put(`/v1/user/${userId}`)
+          .set("Authorization", authHeader)
+          .send(updateData)
+          .expect(204);
+
+        // Verify new password works and data updated
+        const newAuthHeader =
+          "Basic " +
+          Buffer.from(`${testUser.username}:${updateData.password}`).toString(
+            "base64"
+          );
+        const verifyResponse = await appHelper
+          .getRequest()
+          .get(`/v1/user/${userId}`)
           .set("Authorization", newAuthHeader)
           .expect(200);
+
+        expect(verifyResponse.body.first_name).toBe("Multi");
+        expect(verifyResponse.body.last_name).toBe("Update");
+        expect(verifyResponse.body).not.toHaveProperty("password");
       });
 
       test("should handle name updates with special characters", async () => {
@@ -307,15 +324,22 @@ describe("User Authentication & Profile API", () => {
           last_name: "García-López",
         };
 
-        const response = await appHelper
+        await appHelper
           .getRequest()
-          .put("/v1/user/self")
+          .put(`/v1/user/${userId}`)
           .set("Authorization", authHeader)
           .send(updateData)
+          .expect(204);
+
+        // Verify the update
+        const verifyResponse = await appHelper
+          .getRequest()
+          .get(`/v1/user/${userId}`)
+          .set("Authorization", authHeader)
           .expect(200);
 
-        expect(response.body.first_name).toBe(updateData.first_name);
-        expect(response.body.last_name).toBe(updateData.last_name);
+        expect(verifyResponse.body.first_name).toBe(updateData.first_name);
+        expect(verifyResponse.body.last_name).toBe(updateData.last_name);
       });
     });
 
@@ -327,7 +351,7 @@ describe("User Authentication & Profile API", () => {
 
         const response = await appHelper
           .getRequest()
-          .put("/v1/user/self")
+          .put(`/v1/user/${userId}`)
           .send(updateData)
           .expect(401);
 
@@ -348,7 +372,7 @@ describe("User Authentication & Profile API", () => {
 
         const response = await appHelper
           .getRequest()
-          .put("/v1/user/self")
+          .put(`/v1/user/${userId}`)
           .set("Authorization", invalidAuthHeader)
           .send(updateData)
           .expect(401);
@@ -358,7 +382,7 @@ describe("User Authentication & Profile API", () => {
 
       test("should return 400 for attempting to update forbidden fields", async () => {
         const forbiddenFields = [
-          { email: "newemail@example.com" },
+          { username: "newemail@example.com" },
           { id: "new-uuid-value" },
           { account_created: "2020-01-01T00:00:00.000Z" },
           { account_updated: "2020-01-01T00:00:00.000Z" },
@@ -367,7 +391,7 @@ describe("User Authentication & Profile API", () => {
         for (const updateData of forbiddenFields) {
           const response = await appHelper
             .getRequest()
-            .put("/v1/user/self")
+            .put(`/v1/user/${userId}`)
             .set("Authorization", authHeader)
             .send(updateData)
             .expect(400);
@@ -391,7 +415,7 @@ describe("User Authentication & Profile API", () => {
 
           const response = await appHelper
             .getRequest()
-            .put("/v1/user/self")
+            .put(`/v1/user/${userId}`)
             .set("Authorization", authHeader)
             .send(updateData)
             .expect(400);
@@ -412,7 +436,7 @@ describe("User Authentication & Profile API", () => {
         for (const updateData of invalidNames) {
           const response = await appHelper
             .getRequest()
-            .put("/v1/user/self")
+            .put(`/v1/user/${userId}`)
             .set("Authorization", authHeader)
             .send(updateData)
             .expect(400);
@@ -425,7 +449,7 @@ describe("User Authentication & Profile API", () => {
       test("should return 400 for no valid fields provided", async () => {
         const response = await appHelper
           .getRequest()
-          .put("/v1/user/self")
+          .put(`/v1/user/${userId}`)
           .set("Authorization", authHeader)
           .send({})
           .expect(400);
@@ -438,13 +462,13 @@ describe("User Authentication & Profile API", () => {
 
       test("should return 400 for only invalid fields", async () => {
         const updateData = {
-          email: "newemail@example.com",
+          username: "newemail@example.com",
           account_created: "2020-01-01T00:00:00.000Z",
         };
 
         const response = await appHelper
           .getRequest()
-          .put("/v1/user/self")
+          .put(`/v1/user/${userId}`)
           .set("Authorization", authHeader)
           .send(updateData)
           .expect(400);
@@ -463,13 +487,13 @@ describe("User Authentication & Profile API", () => {
 
         await appHelper
           .getRequest()
-          .put("/v1/user/self")
+          .put(`/v1/user/${userId}`)
           .set("Authorization", authHeader)
           .send(updateData)
-          .expect(200);
+          .expect(204);
 
         // Verify password is hashed in database
-        const user = await User.findByEmail(testUser.email);
+        const user = await User.findByUsername(testUser.username);
         expect(user.password).not.toBe(newPassword);
         expect(user.password).toMatch(/^\$2[ab]\$\d{2}\$/); // BCrypt hash pattern
 
@@ -485,7 +509,7 @@ describe("User Authentication & Profile API", () => {
         // Get initial timestamp
         const initialResponse = await appHelper
           .getRequest()
-          .get("/v1/user/self")
+          .get(`/v1/user/${userId}`)
           .set("Authorization", authHeader);
 
         const initialTimestamp = new Date(initialResponse.body.account_updated);
@@ -498,21 +522,29 @@ describe("User Authentication & Profile API", () => {
           first_name: "TimestampTest",
         };
 
-        const updateResponse = await appHelper
+        await appHelper
           .getRequest()
-          .put("/v1/user/self")
+          .put(`/v1/user/${userId}`)
           .set("Authorization", authHeader)
           .send(updateData)
+          .expect(204);
+
+        // Verify timestamp changed
+        const verifyResponse = await appHelper
+          .getRequest()
+          .get(`/v1/user/${userId}`)
+          .set("Authorization", authHeader)
           .expect(200);
 
-        const updatedTimestamp = new Date(updateResponse.body.account_updated);
+        const updatedTimestamp = new Date(verifyResponse.body.account_updated);
 
         expect(updatedTimestamp.getTime()).toBeGreaterThan(
           initialTimestamp.getTime()
         );
-        expect(updateResponse.body.account_created).toBe(
+        expect(verifyResponse.body.account_created).toBe(
           initialResponse.body.account_created
         );
+        expect(verifyResponse.body.first_name).toBe("TimestampTest");
       });
     });
 
@@ -523,22 +555,22 @@ describe("User Authentication & Profile API", () => {
           .map((_, i) =>
             appHelper
               .getRequest()
-              .put("/v1/user/self")
+              .put(`/v1/user/${userId}`)
               .set("Authorization", authHeader)
               .send({ first_name: `Concurrent${i}` })
           );
 
         const responses = await Promise.all(updateRequests);
 
-        // All requests should succeed
+        // All requests should succeed with 204
         responses.forEach((response) => {
-          expect(response.status).toBe(200);
+          expect(response.status).toBe(204);
         });
 
         // Final state should be one of the updates
         const finalResponse = await appHelper
           .getRequest()
-          .get("/v1/user/self")
+          .get(`/v1/user/${userId}`)
           .set("Authorization", authHeader);
 
         expect(finalResponse.body.first_name).toMatch(/^Concurrent[0-2]$/);
@@ -550,15 +582,22 @@ describe("User Authentication & Profile API", () => {
           last_name: "b".repeat(100), // Maximum allowed
         };
 
-        const response = await appHelper
+        await appHelper
           .getRequest()
-          .put("/v1/user/self")
+          .put(`/v1/user/${userId}`)
           .set("Authorization", authHeader)
           .send(updateData)
+          .expect(204);
+
+        // Verify the update
+        const verifyResponse = await appHelper
+          .getRequest()
+          .get(`/v1/user/${userId}`)
+          .set("Authorization", authHeader)
           .expect(200);
 
-        expect(response.body.first_name).toBe(updateData.first_name);
-        expect(response.body.last_name).toBe(updateData.last_name);
+        expect(verifyResponse.body.first_name).toBe(updateData.first_name);
+        expect(verifyResponse.body.last_name).toBe(updateData.last_name);
       });
     });
   });

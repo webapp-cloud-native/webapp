@@ -24,7 +24,7 @@ describe("Product Management API", () => {
   // Helper function to create a test user
   async function createTestUser() {
     testUser = {
-      email: `productowner-${Date.now()}@example.com`, // Unique email each time
+      username: `productowner-${Date.now()}@example.com`, // Fixed: changed from email
       password: "ProductPass123!",
       first_name: "Product",
       last_name: "Owner",
@@ -39,7 +39,9 @@ describe("Product Management API", () => {
     userId = createUserResponse.body.id;
     authHeader =
       "Basic " +
-      Buffer.from(`${testUser.email}:${testUser.password}`).toString("base64");
+      Buffer.from(`${testUser.username}:${testUser.password}`).toString(
+        "base64"
+      );
 
     return { userId, authHeader };
   }
@@ -388,7 +390,7 @@ describe("Product Management API", () => {
 
       // Create another user for ownership tests
       otherUser = {
-        email: `other-${Date.now()}@example.com`,
+        username: `other-${Date.now()}@example.com`, // Fixed: changed from email
         password: "OtherPass123!",
         first_name: "Other",
         last_name: "User",
@@ -398,7 +400,7 @@ describe("Product Management API", () => {
 
       otherAuthHeader =
         "Basic " +
-        Buffer.from(`${otherUser.email}:${otherUser.password}`).toString(
+        Buffer.from(`${otherUser.username}:${otherUser.password}`).toString(
           "base64"
         );
     });
@@ -647,7 +649,7 @@ describe("Product Management API", () => {
 
       // Create another user for ownership tests
       const otherUser = {
-        email: `deleter-${Date.now()}@example.com`,
+        username: `deleter-${Date.now()}@example.com`, // Fixed: changed from email
         password: "DeletePass123!",
         first_name: "Delete",
         last_name: "User",
@@ -657,7 +659,7 @@ describe("Product Management API", () => {
 
       otherAuthHeader =
         "Basic " +
-        Buffer.from(`${otherUser.email}:${otherUser.password}`).toString(
+        Buffer.from(`${otherUser.username}:${otherUser.password}`).toString(
           "base64"
         );
     });

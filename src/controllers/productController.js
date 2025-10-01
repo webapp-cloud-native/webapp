@@ -304,6 +304,7 @@ const updateProduct = async (req, res) => {
       owner_user_id: product.owner_user_id,
     };
 
+    // Return 200 OK with product data as per Postman tests
     res.status(200).json(productResponse);
   } catch (error) {
     console.error("Error updating product:", error);
