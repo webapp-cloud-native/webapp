@@ -308,6 +308,6 @@ npm test -- --verbose
 
 ### Port Conflicts
 ```bash
-# Find process using port 8080
+# Find process using port 8080 /test
 lsof -i :8080
 ```
