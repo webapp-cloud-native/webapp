@@ -23,7 +23,7 @@ describe("B. Negative Tests - Authentication Error Tests", () => {
     const testUser = {
       username: `autherr-${Date.now()}@example.com`,
       password: "AuthErr123!",
-      first_name: "Auth",
+      first_name: "",
       last_name: "Error",
     };
 
