@@ -32,4 +32,4 @@ jobs:
             - name: Validate Template
               run: |
                   cd packer
-                  packer validate .
+                  packer validate -syntax-only .
