@@ -5,6 +5,14 @@ yarn-debug.log*
 yarn-error.log*
 package-lock.json
 
+
+# macOS system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
 # Environment variables
 .env
 .env.*

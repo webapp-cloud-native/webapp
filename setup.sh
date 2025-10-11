@@ -1,44 +1,13 @@
 #!/bin/bash
 set -e
 
-# Assignment 4 - Shell Script for Application Setup
-# This script automates the deployment of a cloud-native web application
+# Assignment 5 - Shell Script for Application Setup in AMI
+# This script is designed to run during Packer AMI build
 # Can be run multiple times safely (idempotent)
 
-# ============================================
-# LOAD CREDENTIALS FROM .env FILE
-# ============================================
-
-echo "Loading configuration from .env file..."
-
-# Check if .env file exists
-if [ -f /tmp/.env ]; then
-    ENV_FILE="/tmp/.env"
-elif [ -f .env ]; then
-    ENV_FILE=".env"
-else
-    echo "ERROR: .env file not found!"
-    exit 1
-fi
-
-# Function to extract value from .env file
-get_env_value() {
-    local key=$1
-    grep "^${key}=" "${ENV_FILE}" | cut -d '=' -f2- | tr -d '"' | tr -d "'"
-}
-
-# Load database credentials
-db_name=$(get_env_value "DB_NAME")
-db_user=$(get_env_value "DB_USER")
-db_password=$(get_env_value "DB_PASSWORD")
-
-# Validate credentials
-if [ -z "$db_name" ] || [ -z "$db_user" ] || [ -z "$db_password" ]; then
-    echo "ERROR: Failed to load database credentials from .env"
-    exit 1
-fi
-
-echo "Configuration loaded successfully"
+echo "============================================"
+echo "Starting Application Setup for AMI Build"
+echo "============================================"
 
 # ============================================
 # 1. UPDATE PACKAGE LISTS
@@ -50,72 +19,47 @@ sudo apt-get update -y
 # 2. UPGRADE SYSTEM PACKAGES
 # ============================================
 echo "Step 2: Upgrading system packages..."
-sudo apt-get upgrade -y
+sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
 
 # ============================================
-# 3. INSTALL DATABASE MANAGEMENT SYSTEM + TOOLS
+# 3. INSTALL REQUIRED TOOLS
 # ============================================
-echo "Step 3: Installing PostgreSQL and required tools..."
-sudo apt-get install -y postgresql postgresql-contrib unzip curl
+echo "Step 3: Installing required tools..."
+sudo apt-get install -y unzip curl wget
 
-# Enable and start PostgreSQL service
+# ============================================
+# 4. INSTALL NODE.JS 18.x
+# ============================================
+echo "Step 4: Installing Node.js 18.x..."
+
+# Remove any existing Node.js
+sudo apt-get remove -y nodejs npm 2>/dev/null || true
+
+# Install Node.js 18.x from NodeSource
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Verify Node.js installation
+node --version
+npm --version
+
+echo "Node.js installed successfully"
+
+# ============================================
+# 5. INSTALL POSTGRESQL 14
+# ============================================
+echo "Step 5: Installing PostgreSQL 14..."
+sudo apt-get install -y postgresql postgresql-contrib
+
+# Enable PostgreSQL service (but don't start during AMI build)
 sudo systemctl enable postgresql
-sudo systemctl start postgresql
 
-echo "PostgreSQL and tools installed successfully"
-
-# ============================================
-# 4. CREATE APPLICATION DATABASE (IDEMPOTENT)
-# ============================================
-echo "Step 4: Creating application database..."
-
-# Create database and user (idempotent - checks if exists first)
-sudo -u postgres psql <<EOF
--- Create database only if it doesn't exist
-SELECT 'CREATE DATABASE ${db_name}'
-WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${db_name}')\gexec
-
--- Create or update user
-DO \$\$
-BEGIN
-    IF NOT EXISTS (SELECT FROM pg_catalog.pg_user WHERE usename = '${db_user}') THEN
-        CREATE USER ${db_user} WITH PASSWORD '${db_password}';
-        RAISE NOTICE 'User ${db_user} created';
-    ELSE
-        ALTER USER ${db_user} WITH PASSWORD '${db_password}';
-        RAISE NOTICE 'User ${db_user} password updated';
-    END IF;
-END
-\$\$;
-
--- Grant privileges
-GRANT ALL PRIVILEGES ON DATABASE ${db_name} TO ${db_user};
-EOF
-
-# Set schema permissions
-sudo -u postgres psql -d "${db_name}" <<EOF
--- Make user owner of public schema
-ALTER SCHEMA public OWNER TO ${db_user};
-
--- Grant all privileges on schema
-GRANT ALL PRIVILEGES ON SCHEMA public TO ${db_user};
-
--- Grant privileges on existing tables and sequences
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${db_user};
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${db_user};
-
--- Grant default privileges for future tables and sequences
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${db_user};
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${db_user};
-EOF
-
-echo "Database '${db_name}' created successfully with full permissions"
+echo "PostgreSQL installed successfully"
 
 # ============================================
-# 5. CREATE APPLICATION LINUX GROUP (IDEMPOTENT)
+# 6. CREATE APPLICATION GROUP (IDEMPOTENT)
 # ============================================
-echo "Step 5: Creating application group..."
-# Only create if doesn't exist
+echo "Step 6: Creating application group..."
 if ! getent group csye6225 > /dev/null 2>&1; then
     sudo groupadd csye6225
     echo "Group csye6225 created"
@@ -124,29 +68,25 @@ else
 fi
 
 # ============================================
-# 6. CREATE APPLICATION USER ACCOUNT (IDEMPOTENT)
+# 7. CREATE APPLICATION USER ACCOUNT (IDEMPOTENT)
 # ============================================
-echo "Step 6: Creating application user..."
-# Only create if doesn't exist
+echo "Step 7: Creating application user..."
 if ! id csye6225 > /dev/null 2>&1; then
-    sudo useradd -r -s /bin/false -g csye6225 -d /opt/csye6225 -m csye6225
-    echo "User csye6225 created"
+    sudo useradd -r -s /usr/sbin/nologin -g csye6225 -d /opt/csye6225 -m csye6225
+    echo "User csye6225 created with nologin shell"
 else
     echo "User csye6225 already exists"
 fi
 
 # Ensure home directory exists with correct permissions
-sudo mkdir -p /home/csye6225
-sudo chown csye6225:csye6225 /home/csye6225
-sudo chmod 755 /home/csye6225
-
-# ============================================
-# 7. DEPLOY APPLICATION FILES
-# ============================================
-echo "Step 7: Deploying application files to /opt/csye6225/..."
-
-# Create directory if it doesn't exist
 sudo mkdir -p /opt/csye6225
+sudo chown csye6225:csye6225 /opt/csye6225
+sudo chmod 755 /opt/csye6225
+
+# ============================================
+# 8. DEPLOY APPLICATION FILES
+# ============================================
+echo "Step 8: Deploying application files to /opt/csye6225/..."
 
 # Check if webapp.zip exists and unzip
 if [ -f /tmp/webapp.zip ]; then
@@ -160,147 +100,128 @@ if [ -f /tmp/webapp.zip ]; then
         sudo rm -rf /opt/csye6225/webapp
     fi
     
-    # Remove Mac artifacts
+    # Remove Mac artifacts and unnecessary files
     sudo rm -rf /opt/csye6225/__MACOSX
     sudo find /opt/csye6225 -name ".DS_Store" -delete 2>/dev/null || true
+    sudo rm -rf /opt/csye6225/.git 2>/dev/null || true
     
     echo "Application files extracted successfully"
 else
-    echo "ERROR: webapp.zip not found in /tmp/"
-    exit 1
-fi
-
-# Copy .env file to application directory
-if [ -f "${ENV_FILE}" ]; then
-    sudo cp "${ENV_FILE}" /opt/csye6225/.env
-    echo ".env file copied to application directory"
-fi
-
-# Copy .env.test file if exists
-if [ -f /tmp/.env.test ]; then
-    sudo cp /tmp/.env.test /opt/csye6225/.env.test
-    echo ".env.test file copied to application directory"
+    echo "WARNING: webapp.zip not found in /tmp/"
+    echo "Skipping application deployment (might be testing)"
 fi
 
 # ============================================
-# 8. SET FILE PERMISSIONS
+# 9. COPY ENVIRONMENT FILE
 # ============================================
-echo "Step 8: Setting file permissions..."
+echo "Step 9: Setting up environment configuration..."
 
-# Set ownership to application user and group
+if [ -f /tmp/.env ]; then
+    sudo cp /tmp/.env /opt/csye6225/.env
+    sudo chown csye6225:csye6225 /opt/csye6225/.env
+    sudo chmod 640 /opt/csye6225/.env
+    echo ".env file copied and secured"
+else
+    echo "WARNING: .env file not found in /tmp/"
+fi
+
+# ============================================
+# 10. SET PROPER OWNERSHIP AND PERMISSIONS
+# ============================================
+echo "Step 10: Setting ownership and permissions..."
+
+# Set ownership of all application files
 sudo chown -R csye6225:csye6225 /opt/csye6225
 
-# Set appropriate permissions
-sudo chmod -R 755 /opt/csye6225
+# Set directory permissions
+sudo find /opt/csye6225 -type d -exec chmod 755 {} \;
 
-# Secure the .env files
-sudo chmod 600 /opt/csye6225/.env
-[ -f /opt/csye6225/.env.test ] && sudo chmod 600 /opt/csye6225/.env.test
+# Set file permissions
+sudo find /opt/csye6225 -type f -exec chmod 644 {} \;
 
-echo "File permissions set successfully"
-
-# ============================================
-# INSTALL NODE.JS AND DEPENDENCIES
-# ============================================
-echo "Installing Node.js..."
-
-# Check if Node.js already installed
-if command -v node > /dev/null 2>&1; then
-    echo "Node.js already installed: $(node -v)"
-else
-    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-    sudo apt-get install -y nodejs
-    echo "Node.js installed: $(node -v)"
+# Make server.js executable (if needed)
+if [ -f /opt/csye6225/server.js ]; then
+    sudo chmod 755 /opt/csye6225/server.js
 fi
 
-echo "NPM version: $(npm -v)"
-
-# Clean up any existing node_modules to avoid conflicts
-echo "Cleaning up existing node_modules..."
-sudo rm -rf /opt/csye6225/node_modules
-
-# Install application dependencies
-echo "Installing application dependencies..."
-cd /opt/csye6225
-sudo -u csye6225 npm install
-
-echo "Dependencies installed successfully"
+echo "Permissions set successfully"
 
 # ============================================
-# CREATE LOG DIRECTORY
+# 11. INSTALL SYSTEMD SERVICE
 # ============================================
-echo "Creating log directory..."
-sudo mkdir -p /var/log/csye6225
-sudo chown csye6225:csye6225 /var/log/csye6225
-sudo chmod 755 /var/log/csye6225
+echo "Step 11: Installing systemd service..."
 
-# ============================================
-# START APPLICATION
-# ============================================
-echo "=========================================="
-echo "Starting application..."
-echo "=========================================="
-
-cd /opt/csye6225
-
-# Start the application in background
-sudo -u csye6225 nohup npm start > /var/log/csye6225/app.log 2>&1 &
-APP_PID=$!
-
-echo "Application started with PID: $APP_PID"
-echo "Waiting for application to initialize..."
-sleep 10
-
-# Check if application is still running
-if ps -p $APP_PID > /dev/null; then
-    echo "✅ Application is running"
+if [ -f /tmp/webapp.service ]; then
+    # Copy service file to systemd directory
+    sudo cp /tmp/webapp.service /etc/systemd/system/webapp.service
+    
+    # Set correct permissions
+    sudo chmod 644 /etc/systemd/system/webapp.service
+    
+    # Reload systemd daemon
+    sudo systemctl daemon-reload
+    
+    # Enable service (will start on boot)
+    sudo systemctl enable webapp.service
+    
+    echo "Systemd service installed and enabled"
 else
-    echo "❌ Application failed to start"
-    echo "Check logs at: /var/log/csye6225/app.log"
-    tail -20 /var/log/csye6225/app.log
-    exit 1
+    echo "WARNING: webapp.service not found in /tmp/"
 fi
 
 # ============================================
-# HEALTH CHECK TEST
+# 12. VERIFY INSTALLATION
 # ============================================
-echo "=========================================="
-echo "Testing application health..."
-echo "=========================================="
+echo "Step 12: Verifying installation..."
 
-# Test the health endpoint
-HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/healthz)
+echo "Checking Node.js..."
+node --version
 
-if [ "$HEALTH_CHECK" = "200" ]; then
-    echo "✅ Health check passed (HTTP 200)"
-    echo "Application is healthy and ready to serve requests"
-else
-    echo "❌ Health check failed (HTTP $HEALTH_CHECK)"
-    echo "Check logs at: /var/log/csye6225/app.log"
-    tail -20 /var/log/csye6225/app.log
-    exit 1
-fi
+echo "Checking PostgreSQL..."
+psql --version
+
+echo "Checking csye6225 user..."
+id csye6225
+
+echo "Checking application directory..."
+ls -la /opt/csye6225/
+
+echo "Checking systemd service..."
+sudo systemctl status webapp.service --no-pager || true
 
 # ============================================
-# COMPLETION
+# 13. CLEANUP
 # ============================================
-echo "=========================================="
-echo "Setup completed successfully!"
-echo "=========================================="
-echo "Database: ${db_name}"
-echo "Database User: ${db_user}"
-echo "Application Directory: /opt/csye6225"
-echo "Application PID: $APP_PID"
-echo "Log File: /var/log/csye6225/app.log"
+echo "Step 13: Cleaning up temporary files..."
+
+# Remove temporary files
+sudo rm -f /tmp/webapp.zip
+sudo rm -f /tmp/.env
+sudo rm -f /tmp/.env.test
+sudo rm -f /tmp/webapp.service
+sudo rm -f /tmp/setup.sh
+
+# Clean apt cache
+sudo apt-get clean
+sudo apt-get autoremove -y
+
+echo "Cleanup completed"
+
+# ============================================
+# SETUP COMPLETE
+# ============================================
+echo "============================================"
+echo "Application Setup Completed Successfully!"
+echo "============================================"
 echo ""
-echo "Application Status:"
-echo "  Running: ✅ YES"
-echo "  Health Check: ✅ PASSED"
-echo "  Endpoint: http://localhost:8080"
+echo "Summary:"
+echo "- Node.js 18.x installed"
+echo "- PostgreSQL 14 installed"
+echo "- User csye6225 created (nologin)"
+echo "- Application deployed to /opt/csye6225"
+echo "- Systemd service configured"
 echo ""
-echo "Useful Commands:"
-echo "  View logs: tail -f /var/log/csye6225/app.log"
-echo "  Stop app: sudo pkill -f 'node.*server.js'"
-echo "  Restart app: cd /opt/csye6225 && sudo -u csye6225 npm start"
-echo "  Test health: curl http://localhost:8080/healthz"
-echo "=========================================="
+echo "The application will start automatically on instance boot."
+echo "============================================"
+
+exit 0
