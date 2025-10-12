@@ -68,14 +68,12 @@ jobs:
         run: |
           zip -r webapp.zip . \
             -x "*.git*" \
-            -x "*node_modules*" \
             -x "*tests*" \
             -x "*.github*" \
             -x "*packer*" \
             -x "*.DS_Store" \
             -x "*coverage*" \
             -x "*.vscode*" \
-            -x "*setup.sh.backup*"
 
           ls -lh webapp.zip
 
