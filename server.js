@@ -18,7 +18,7 @@ const { jsonErrorHandler } = require("./src/middleware/jsonErrorHandler");
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-const HOST = "127.0.0.1"; // IPv4 binding to prevent IPv6 connection attempts
+const HOST = "0.0.0.0"; // IPv4 binding to prevent IPv6 connection attempts
 
 // Middleware for parsing JSON
 app.use(express.json());
@@ -67,7 +67,7 @@ async function startServer() {
     const server = app.listen(PORT, HOST, () => {
       console.log(`Server running on http://${HOST}:${PORT}`);
       console.log("Environment:", process.env.NODE_ENV || "development");
-      console.log("API Documentation: http://127.0.0.1:8080/api-docs");
+      console.log(`API Documentation: http://${HOST}:${PORT}/api-docs`);
       console.log("Ready to receive requests");
     });
 
