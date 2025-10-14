@@ -1,69 +1,51 @@
 # Cloud-Native Web Application
 
-RESTful API backend with Node.js, Express.js, PostgreSQL, integration testing, and CI/CD.
-
----
+RESTful API with Node.js, Express.js, PostgreSQL, Packer AMI, and AWS deployment.
 
 ## Prerequisites
 
-### Programming Language & Runtime
 - **Node.js** 18+
 - **npm** 8+
-
-### System Requirements
 - **PostgreSQL** 14+
-- User account with CREATEDB privileges
+- **Packer** (latest)
+- **Terraform** 1.5+
+- **AWS CLI**
+- **Ubuntu 24.04 LTS**
 
----
+## Dependencies
 
-## Framework and Library Dependencies
+**Core:**
+- express ^5.1.0
+- sequelize ^6.37.7
+- pg ^8.16.3
+- bcrypt ^5.1.1
+- express-validator ^7.2.1
+- dotenv ^17.2.2
 
-### Core Dependencies
-- **express**: ^5.1.0
-- **sequelize**: ^6.37.7  
-- **pg**: ^8.16.3
-- **bcrypt**: ^5.1.1
-- **express-validator**: ^7.2.1
-- **dotenv**: ^17.2.2
-- **swagger-ui-express**: ^5.0.1
-- **swagger-jsdoc**: ^6.2.8
+**Testing:**
+- jest ^29.7.0
+- supertest ^6.3.4
 
-### Testing Dependencies
-- **jest**: ^29.7.0
-- **supertest**: ^6.3.4
-- **cross-env**: ^7.0.3
+## Quick Start
 
----
-
-## Step-by-Step Build Instructions
-
-### 1. Clone Repository
+### 1. Clone & Install
 ```bash
 git clone git@github.com:YOUR_USERNAME/webapp.git
 cd webapp
-```
-
-### 2. Install Dependencies
-```bash
 npm install
 ```
 
-### 3. Database Setup
+### 2. Database Setup
 ```bash
-psql -U postgres -h localhost
-
+psql -U postgres
 CREATE USER your_username WITH PASSWORD 'your_password' CREATEDB;
 CREATE DATABASE webapp_db;
-GRANT ALL PRIVILEGES ON DATABASE webapp_db TO your_username;
 CREATE DATABASE webapp_test;
-GRANT ALL PRIVILEGES ON DATABASE webapp_test TO your_username;
-
 \q
 ```
 
-### 4. Environment Configuration
-
-Create `.env` file:
+### 3. Environment Configuration
+Create `.env`:
 ```env
 NODE_ENV=development
 DB_HOST=localhost
@@ -74,132 +56,113 @@ DB_PASSWORD=your_password
 PORT=8080
 ```
 
-Create `.env.test` file:
-```env
-NODE_ENV=test
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=webapp_test
-DB_USER=your_username
-DB_PASSWORD=your_password
-PORT=8080
-```
-
-### 5. Start Application
+### 4. Run
 ```bash
 npm start
 ```
 
----
+## Testing
 
-## Testing Procedures and Commands
-
-### Run Tests
 ```bash
-# Run all 84 integration tests
-npm test
-
-# Run with watch mode
-npm run test:watch
-
-# Generate coverage report
-npm run test:coverage
+npm test                  # Run all 84 tests
+npm run test:watch        # Watch mode
+npm run test:coverage     # Coverage report
 ```
 
-### Test Configuration
-- **Framework:** Jest 29.7.0
-- **HTTP Testing:** SuperTest 6.3.4
-- **Execution:** Serial (maxWorkers: 1)
-- **Timeout:** 30 seconds per test
-- **Total Tests:** 84 integration tests
-
-### Test Coverage
+**Test Suite:**
 - Health endpoint: 12 tests
 - User management: 50 tests
 - Product management: 22 tests
 
----
+## Packer AMI
 
-## Deployment Instructions
+### Components
+- `packer/aws-ubuntu.pkr.hcl` - AMI template
+- `packer/webapp.service` - Systemd service
+- `setup.sh` - Automated setup script
 
-### Local Development
+### Build AMI
 ```bash
-# Start PostgreSQL
-brew services start postgresql@14  # macOS
-sudo systemctl start postgresql    # Linux
-
-# Start application
-npm start
+cd packer
+packer init .
+packer fmt .
+packer validate aws-ubuntu.pkr.hcl
+packer build -var "aws_region=us-east-1" aws-ubuntu.pkr.hcl
 ```
 
-### Required Environment Variables
-- `NODE_ENV` - Environment (development/test/production)
-- `DB_HOST` - Database host
-- `DB_PORT` - Database port
-- `DB_NAME` - Database name
-- `DB_USER` - Database user
-- `DB_PASSWORD` - Database password
-- `PORT` - Application port (default: 8080)
+**AMI Includes:**
+- Ubuntu 24.04 LTS
+- Node.js 18.x
+- PostgreSQL 14
+- Application at `/opt/csye6225/`
+- User `csye6225` (nologin)
+- Systemd service
 
----
+## AWS Deployment
+
+### With Terraform
+```bash
+cd tf-aws-infra
+terraform init
+terraform plan
+terraform apply
+
+# Access application
+curl http://<EC2_PUBLIC_IP>:8080/healthz
+
+# Destroy
+terraform destroy
+```
+
+### EC2 Details
+- Application runs automatically via systemd
+- Service: `systemctl status webapp.service`
+- Path: `/opt/csye6225/`
+- User: `csye6225`
+- Database: PostgreSQL (local)
 
 ## API Endpoints
 
-### Public
-- `GET /healthz` - Health check (200/503)
-- `POST /v1/user` - User registration (201)
-- `GET /v1/product/{productId}` - Get product (200)
+**Public:**
+- `GET /healthz` - Health check
+- `POST /v1/user` - User registration
+- `GET /v1/product/{id}` - Get product
 
-### Authenticated
-- `GET /v1/user/{userId}` - Get user (200, auth required)
-- `PUT /v1/user/{userId}` - Update user (204, auth required)
-- `POST /v1/product` - Create product (201, auth required)
-- `PUT /v1/product/{productId}` - Update product (200, owner only)
-- `PATCH /v1/product/{productId}` - Partial update (200, owner only)
-- `DELETE /v1/product/{productId}` - Delete product (204, owner only)
-
-### Documentation
+**Authenticated (Basic Auth):**
+- `GET /v1/user/{id}` - Get user
+- `PUT /v1/user/{id}` - Update user
+- `POST /v1/product` - Create product
+- `PUT /v1/product/{id}` - Update product
+- `PATCH /v1/product/{id}` - Partial update
+- `DELETE /v1/product/{id}` - Delete product
 - `GET /api-docs` - Swagger UI
 
----
+## CI/CD Workflows
 
-## CI/CD Pipeline
+### 1. Integration Tests (`ci.yml`)
+- **Trigger:** PR to `main`
+- **Steps:** Checkout → Setup Node.js → Install deps → Setup PostgreSQL → Run tests
 
-### GitHub Actions Workflow
-**File:** `.github/workflows/ci.yml`
+### 2. Packer Validate (`packer-validate.yml`)
+- **Trigger:** PR to `main`
+- **Steps:** Checkout → Setup Packer → Format check → Validate template
 
-**Triggers:** Pull requests to `main` branch
+### 3. Packer Build (`packer-build.yml`)
+- **Trigger:** Push to `main` (after merge)
+- **Steps:** Checkout → Setup → Run tests → Build artifact → Build AMI → Share with DEMO
 
-**Steps:**
-1. Checkout code
-2. Setup Node.js 18
-3. Install dependencies
-4. Start PostgreSQL service
-5. Run integration tests
+**GitHub Secrets Required:**
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+- `DEMO_ACCOUNT_ID`, `DEV_ACCOUNT_ID`
+- `DB_NAME`, `DB_USER`, `DB_PASSWORD`
 
-**Environment:**
-- Ubuntu latest
-- PostgreSQL 14
-- Node.js 18
+## Tech Stack
 
-### Branch Protection
-- Require pull request before merging
-- Require status checks to pass
-- Require branches to be up to date
-- Include administrators
-
----
-
-## Technology Stack
-
-- **Backend:** Node.js 18, Express.js 5.1.0
-- **Database:** PostgreSQL 14, Sequelize 6.37.7
-- **Authentication:** HTTP Basic Auth with BCrypt
-- **Testing:** Jest 29.7.0, SuperTest 6.3.4
-- **CI/CD:** GitHub Actions
-- **Documentation:** Swagger/OpenAPI 3.0
-
----
+- Node.js 18, Express.js 5.1
+- PostgreSQL 14, Sequelize 6.37
+- Jest 29.7, SuperTest 6.3
+- Packer, Terraform
+- GitHub Actions, systemd
 
 ## Project Structure
 
@@ -207,107 +170,142 @@ npm start
 webapp/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml                    # CI/CD pipeline
+│       ├── ci.yml                        # Integration testing workflow
+│       ├── packer-validate.yml           # Packer validation workflow
+│       └── packer-build.yml              # AMI building workflow
+│
+├── packer/
+│   ├── aws-ubuntu.pkr.hcl                # Packer template for AMI
+│   └── webapp.service                    # Systemd service configuration
 │
 ├── src/
 │   ├── config/
-│   │   ├── database.js              # Database configuration
-│   │   └── swagger.js               # API documentation config
+│   │   ├── database.js                   # Database configuration
+│   │   └── swagger.js                    # API documentation config
 │   ├── controllers/
-│   │   ├── healthController.js      # Health check logic
-│   │   ├── userController.js        # User management logic
-│   │   └── productController.js     # Product management logic
+│   │   ├── healthController.js           # Health check logic
+│   │   ├── userController.js             # User management logic
+│   │   └── productController.js          # Product management logic
 │   ├── middleware/
-│   │   ├── auth.js                  # Authentication
-│   │   ├── errorHandler.js          # Error handling
-│   │   ├── jsonErrorHandler.js      # JSON error handler
-│   │   └── validatePayload.js       # Request validation
+│   │   ├── auth.js                       # Authentication
+│   │   ├── errorHandler.js               # Error handling
+│   │   ├── jsonErrorHandler.js           # JSON error handler
+│   │   └── validatePayload.js            # Request validation
 │   ├── models/
-│   │   ├── HealthCheck.js           # HealthCheck model
-│   │   ├── User.js                  # User model
-│   │   └── Product.js               # Product model
+│   │   ├── HealthCheck.js                # HealthCheck model
+│   │   ├── User.js                       # User model
+│   │   └── Product.js                    # Product model
 │   ├── routes/
-│   │   ├── healthRoutes.js          # Health endpoints
-│   │   ├── userRoutes.js            # User endpoints
-│   │   ├── productRoutes.js         # Product endpoints
-│   │   └── docsRoutes.js            # Swagger docs
+│   │   ├── healthRoutes.js               # Health endpoints
+│   │   ├── userRoutes.js                 # User endpoints
+│   │   ├── productRoutes.js              # Product endpoints
+│   │   └── docsRoutes.js                 # Swagger docs
 │   └── services/
-│       ├── authService.js           # Auth utilities
-│       └── databaseService.js       # Database utilities
+│       ├── authService.js                # Auth utilities
+│       └── databaseService.js            # Database utilities
 │
 ├── tests/
 │   ├── config/
-│   │   ├── test-database.js         # Test DB setup
-│   │   └── test-setup.js            # Jest config
+│   │   ├── test-database.js              # Test DB setup
+│   │   └── test-setup.js                 # Jest config
 │   ├── helpers/
-│   │   └── app-helper.js            # Test helper
+│   │   └── app-helper.js                 # Test helper
 │   └── integration/
-│       ├── health.test.js           # Health tests (12)
-│       ├── A-positive-tests/        # Happy path tests
+│       ├── health.test.js                # Health tests (12)
+│       ├── A-positive-tests/             # Happy path tests
 │       │   ├── authentication-tests/
 │       │   ├── creation-tests/
 │       │   ├── retrieval-tests/
 │       │   ├── update-tests/
 │       │   └── delete-tests/
-│       ├── B-negative-tests/        # Error handling tests
+│       ├── B-negative-tests/             # Error handling tests
 │       │   ├── authentication-error-tests/
 │       │   ├── invalid-input-tests/
 │       │   ├── resource-not-found-tests/
 │       │   └── http-method-tests/
-│       └── C-edge-case-tests/       # Edge case tests
+│       └── C-edge-case-tests/            # Edge case tests
 │           ├── boundary-value-tests/
 │           ├── data-integrity-tests/
 │           └── performance-tests/
 │
-├── .env                              # Development config (gitignored)
-├── .env.test                         # Test config (gitignored)
-├── .gitignore                        # Git ignore patterns
-├── jest.config.js                    # Jest configuration
-├── package.json                      # Dependencies & scripts
-├── README.md                         # This file
-└── server.js                         # Application entry point
+├── .env                                   # Development config (gitignored)
+├── .env.test                              # Test config (gitignored)
+├── .gitignore                             # Git ignore patterns
+├── jest.config.js                         # Jest configuration
+├── package.json                           # Dependencies & scripts
+├── setup.sh                               # Automated setup script for AMI
+├── README.md                              # This file
+└── server.js                              # Application entry point
 ```
 
----
+### EC2 Structure
+```
+/opt/csye6225/                    # Application directory
+├── src/
+├── node_modules/
+├── .env
+├── server.js
+└── ...
 
-## Manual API Testing
+/etc/systemd/system/webapp.service
+```
 
+## AWS Resources
+
+- VPC with public/private subnets
+- Security groups (ports 22, 80, 443, 8080)
+- EC2 instance with custom AMI
+- PostgreSQL (local on EC2)
+- Database port 5432 not exposed
+
+## Testing
+
+### Local
 ```bash
-# Health check
 curl http://127.0.0.1:8080/healthz
 
-# Create user
 curl -X POST http://127.0.0.1:8080/v1/user \
   -H "Content-Type: application/json" \
-  -d '{"username":"test@example.com","password":"SecurePass123!","first_name":"John","last_name":"Doe"}'
-
-# Get user (authenticated)
-AUTH=$(echo -n "test@example.com:SecurePass123!" | base64)
-curl -H "Authorization: Basic $AUTH" http://127.0.0.1:8080/v1/user/1
+  -d '{"username":"test@example.com","password":"Pass123!","first_name":"John","last_name":"Doe"}'
 ```
 
----
+### EC2
+```bash
+curl http://<EC2_PUBLIC_IP>:8080/healthz
+```
 
 ## Troubleshooting
 
-### Database Connection Issues
+**Database:**
 ```bash
-# Check PostgreSQL status
-brew services list  # macOS
-sudo systemctl status postgresql  # Linux
+brew services list                      # macOS
+sudo systemctl status postgresql        # Linux
 ```
 
-### Test Failures
+**Packer:**
 ```bash
-# Verify test database exists
-psql -U postgres -l | grep webapp_test
-
-# Run with verbose output
-npm test -- --verbose
+packer fmt -check packer/
+export PACKER_LOG=1
 ```
 
-### Port Conflicts
+**EC2:**
 ```bash
-# Find process using port 8080
-lsof -i :8080
+sudo systemctl status webapp.service
+sudo journalctl -u webapp.service -f
+ls -la /opt/csye6225/
 ```
+
+**Terraform:**
+```bash
+terraform validate
+TF_LOG=DEBUG terraform plan
+```
+
+## AWS Accounts
+
+- DEV: 516246499586
+- DEMO: 606531835150
+
+---
+
+CSYE6225 - Cloud Computing
