@@ -77,6 +77,10 @@ jobs:
 
           ls -lh webapp.zip
 
+          echo "Verifying node_modules is included:"
+          unzip -l webapp.zip | grep "node_modules/" | head -5
+          test $(unzip -l webapp.zip | grep -c "node_modules/") -gt 0 || exit 1
+
       # Step 8: Configure AWS credentials
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
