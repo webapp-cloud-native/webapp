@@ -194,16 +194,6 @@ sudo systemctl status webapp.service --no-pager || true
 # ============================================
 echo "Step 13: Cleaning up temporary files..."
 
-# Remove git (Assignment 5 requirement)
-echo "Removing git..."
-if command -v git &> /dev/null; then
-    sudo apt-get remove -y git
-    sudo apt-get purge -y git
-    echo "Git successfully removed"
-else
-    echo "Git was not installed"
-fi
-
 # Remove temporary files
 sudo rm -f /tmp/webapp.zip
 sudo rm -f /tmp/.env
