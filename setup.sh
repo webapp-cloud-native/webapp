@@ -45,16 +45,6 @@ npm --version
 
 echo "Node.js installed successfully"
 
-# ============================================
-# 5. INSTALL POSTGRESQL 14
-# ============================================
-# echo "Step 5: Installing PostgreSQL 14..."
-# sudo apt-get install -y postgresql postgresql-contrib
-
-# # Enable PostgreSQL service (but don't start during AMI build)
-# sudo systemctl enable postgresql
-
-# echo "PostgreSQL installed successfully"
 
 # ============================================
 # 6. CREATE APPLICATION GROUP (IDEMPOTENT)
