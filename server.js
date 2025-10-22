@@ -10,7 +10,7 @@ const {
 const healthRoutes = require("./src/routes/healthRoutes");
 const userRoutes = require("./src/routes/userRoutes");
 const productRoutes = require("./src/routes/productRoutes");
-const docsRoutes = require("./src/routes/docsRoutes");
+const imageRoutes = require("./src/routes/imageRoutes");
 
 // Import middleware
 const errorHandler = require("./src/middleware/errorHandler");
@@ -34,10 +34,11 @@ if (process.env.NODE_ENV === "development") {
 }
 
 // Routes
-app.use("/", docsRoutes); // API documentation routes
+
 app.use("/", healthRoutes); // Health check routes
 app.use("/", userRoutes); // User management routes
 app.use("/", productRoutes); // Product management routes
+app.use("/", imageRoutes); // Image management routes
 
 // 404 handler for undefined routes
 app.use((req, res) => {
@@ -67,7 +68,6 @@ async function startServer() {
     const server = app.listen(PORT, HOST, () => {
       console.log(`Server running on http://${HOST}:${PORT}`);
       console.log("Environment:", process.env.NODE_ENV || "development");
-      console.log(`API Documentation: http://${HOST}:${PORT}/api-docs`);
       console.log("Ready to receive requests");
     });
 

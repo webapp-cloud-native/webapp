@@ -2,7 +2,7 @@ const { sequelize } = require("../config/database");
 const { HealthCheck } = require("../models/HealthCheck");
 
 // Import User and Product models conditionally to avoid errors if they don't exist yet
-let User, Product;
+let User, Product, Image;
 
 try {
   const userModel = require("../models/User");
@@ -18,6 +18,13 @@ try {
   console.log(
     "Product model not found - skipping product-related associations"
   );
+}
+
+try {
+  const imageModel = require("../models/Image");
+  Image = imageModel.Image;
+} catch (error) {
+  console.log("Image model not found - skipping image-related associations");
 }
 
 async function initializeDatabase() {
@@ -43,8 +50,9 @@ async function initializeDatabase() {
   }
 }
 
+// src/services/databaseService.js - UPDATE THE defineAssociations FUNCTION
 function defineAssociations() {
-  // Only define relationships if both models exist
+  // Only define relationships if models exist
   if (User && Product) {
     // User has many Products
     User.hasMany(Product, {
@@ -59,9 +67,37 @@ function defineAssociations() {
     });
 
     console.log("User-Product associations defined successfully");
+  }
+
+  if (User && Product && Image) {
+    // User has many Images
+    User.hasMany(Image, {
+      foreignKey: "user_id",
+      onDelete: "CASCADE",
+    });
+
+    // Image belongs to User
+    Image.belongsTo(User, {
+      foreignKey: "user_id",
+      as: "user",
+    });
+
+    // Product has many Images
+    Product.hasMany(Image, {
+      foreignKey: "product_id",
+      onDelete: "CASCADE",
+    });
+
+    // Image belongs to Product
+    Image.belongsTo(Product, {
+      foreignKey: "product_id",
+      as: "product",
+    });
+
+    console.log("Image associations defined successfully");
   } else {
     console.log(
-      "Skipping model associations - User or Product model not available"
+      "Skipping Image associations - User, Product, or Image model not available"
     );
   }
 }
