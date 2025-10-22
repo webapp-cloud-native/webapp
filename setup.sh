@@ -177,9 +177,6 @@ echo "Step 12: Verifying installation..."
 echo "Checking Node.js..."
 node --version
 
-echo "Checking PostgreSQL..."
-psql --version
-
 echo "Checking csye6225 user..."
 id csye6225
 
@@ -226,7 +223,6 @@ echo "============================================"
 echo ""
 echo "Summary:"
 echo "- Node.js 18.x installed"
-echo "- PostgreSQL 14 installed"
 echo "- User csye6225 created (nologin)"
 echo "- Application deployed to /opt/csye6225"
 echo "- Systemd service configured"
