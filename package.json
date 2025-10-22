@@ -22,7 +22,7 @@
     "multer": "^2.0.2",
     "pg": "^8.16.3",
     "sequelize": "^6.37.7",
-    "uuid": "^13.0.0"
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
