@@ -128,8 +128,6 @@ build {
     inline = [
       "echo 'Verifying Node.js installation...'",
       "node --version",
-      "echo 'Verifying PostgreSQL installation...'",
-      "psql --version",
       "echo 'Verifying csye6225 user...'",
       "id csye6225",
       "echo 'Verifying application directory...'",
