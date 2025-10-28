@@ -1,4 +1,6 @@
 const { HealthCheck } = require("../models/HealthCheck");
+const { trackQuery } = require("../utils/dbMetrics");
+const logger = require("../config/logger");
 
 async function healthCheck(req, res) {
   res.set({
@@ -8,17 +10,25 @@ async function healthCheck(req, res) {
   });
 
   try {
-    const healthCheck = await HealthCheck.create({
-      check_datetime: new Date(),
+    const healthCheck = await trackQuery(
+      () =>
+        HealthCheck.create({
+          check_datetime: new Date(),
+        }),
+      "insert",
+      "health_checks"
+    );
+
+    logger.info("Health check successful", {
+      checkId: healthCheck.check_id,
     });
 
-    console.log(`Health check record created with ID: ${healthCheck.check_id}`);
     return res.status(200).send();
   } catch (error) {
-    console.error(
-      "Health check failed - database insert error:",
-      error.message
-    );
+    logger.error("Health check failed - database insert error", {
+      error: error.message,
+      stack: error.stack,
+    });
     return res.status(503).send();
   }
 }

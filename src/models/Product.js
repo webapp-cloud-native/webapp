@@ -1,5 +1,6 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
+const { trackQuery } = require("../utils/dbMetrics");
 
 const Product = sequelize.define(
   "Product",
@@ -128,5 +129,30 @@ const Product = sequelize.define(
     ],
   }
 );
+// Static method to find product by primary key with metrics tracking
+Product.findByPk = async function (id) {
+  return await trackQuery(
+    () => this.findOne({ where: { id } }),
+    "select",
+    "products"
+  );
+};
 
+// Static method to find product by SKU with metrics tracking
+Product.findBySku = async function (sku) {
+  return await trackQuery(
+    () => this.findOne({ where: { sku } }),
+    "select",
+    "products"
+  );
+};
+
+// Static method to find all products by owner with metrics tracking
+Product.findByOwner = async function (ownerId) {
+  return await trackQuery(
+    () => this.findAll({ where: { owner_user_id: ownerId } }),
+    "select",
+    "products"
+  );
+};
 module.exports = { Product };

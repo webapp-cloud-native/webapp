@@ -1,6 +1,7 @@
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
 const bcrypt = require("bcrypt");
+const { trackQuery } = require("../utils/dbMetrics");
 
 const User = sequelize.define(
   "User",
@@ -101,13 +102,27 @@ const User = sequelize.define(
   }
 );
 
+// Instance method to validate password
 User.prototype.validatePassword = async function (password) {
   return await bcrypt.compare(password, this.password);
 };
 
-// Class method to find user by username (email)
+// Static method to find user by username with metrics tracking
 User.findByUsername = async function (username) {
-  return await this.findOne({ where: { username } });
+  return await trackQuery(
+    () => this.findOne({ where: { username } }),
+    "select",
+    "users"
+  );
+};
+
+// Static method to find user by primary key with metrics tracking
+User.findByPk = async function (id) {
+  return await trackQuery(
+    () => this.findOne({ where: { id } }),
+    "select",
+    "users"
+  );
 };
 
 module.exports = { User };
