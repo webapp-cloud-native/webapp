@@ -129,7 +129,7 @@ build {
     ]
   }
 
-# Copy CloudWatch config to proper location
+  # Copy CloudWatch config to proper location
   provisioner "shell" {
     inline = [
       "sudo mkdir -p /opt/aws/amazon-cloudwatch-agent/etc/",
