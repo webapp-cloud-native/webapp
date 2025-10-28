@@ -1,5 +1,7 @@
 const { Product } = require("../models/Product");
 const { validationResult } = require("express-validator");
+const { trackQuery } = require("../utils/dbMetrics");
+const logger = require("../config/logger");
 
 // Helper function to check for empty or whitespace-only strings
 const isEmptyString = (value) => {
@@ -60,10 +62,8 @@ const createProduct = async (req, res) => {
       });
     }
 
-    const owner_user_id = req.user.id;
-
-    // Check if SKU already exists
-    const existingProduct = await Product.findOne({ where: { sku } });
+    // Check for duplicate SKU
+    const existingProduct = await Product.findBySku(sku);
     if (existingProduct) {
       return res.status(400).json({
         error: "Bad Request",
@@ -71,14 +71,25 @@ const createProduct = async (req, res) => {
       });
     }
 
-    // Create new product
-    const product = await Product.create({
-      name,
-      description,
-      sku,
-      manufacturer,
-      quantity,
-      owner_user_id,
+    // Create product with metrics tracking
+    const product = await trackQuery(
+      () =>
+        Product.create({
+          name,
+          description,
+          sku,
+          manufacturer,
+          quantity,
+          owner_user_id: req.user.id,
+        }),
+      "insert",
+      "products"
+    );
+
+    logger.info("Product created successfully", {
+      productId: product.id,
+      sku: product.sku,
+      ownerId: req.user.id,
     });
 
     const productResponse = {
@@ -95,7 +106,10 @@ const createProduct = async (req, res) => {
 
     res.status(201).json(productResponse);
   } catch (error) {
-    console.error("Error creating product:", error);
+    logger.error("Error creating product", {
+      error: error.message,
+      stack: error.stack,
+    });
 
     // Handle unique constraint errors
     if (error.name === "SequelizeUniqueConstraintError") {
@@ -124,7 +138,7 @@ const createProduct = async (req, res) => {
   }
 };
 
-// Get a product by ID
+// Get a single product
 const getProduct = async (req, res) => {
   try {
     const { productId } = req.params;
@@ -141,11 +155,14 @@ const getProduct = async (req, res) => {
     const product = await Product.findByPk(productId);
 
     if (!product) {
+      logger.warn("Product not found", { productId });
       return res.status(404).json({
         error: "Not Found",
         message: "Product not found",
       });
     }
+
+    logger.info("Product retrieved successfully", { productId: product.id });
 
     const productResponse = {
       id: product.id,
@@ -161,7 +178,11 @@ const getProduct = async (req, res) => {
 
     res.status(200).json(productResponse);
   } catch (error) {
-    console.error("Error getting product:", error);
+    logger.error("Error getting product", {
+      error: error.message,
+      stack: error.stack,
+      productId: req.params.productId,
+    });
     res.status(500).json({
       error: "Internal Server Error",
       message: "An error occurred while retrieving the product",
@@ -277,9 +298,7 @@ const updateProduct = async (req, res) => {
 
     // Check for SKU uniqueness if SKU is being updated
     if (updateData.sku && updateData.sku !== product.sku) {
-      const existingProduct = await Product.findOne({
-        where: { sku: updateData.sku },
-      });
+      const existingProduct = await Product.findBySku(updateData.sku);
       if (existingProduct) {
         return res.status(400).json({
           error: "Bad Request",
@@ -288,9 +307,14 @@ const updateProduct = async (req, res) => {
       }
     }
 
-    // Update product
-    await product.update(updateData);
+    // Update product with metrics tracking
+    await trackQuery(() => product.update(updateData), "update", "products");
     await product.reload();
+
+    logger.info("Product updated successfully", {
+      productId: product.id,
+      updatedFields: Object.keys(updateData),
+    });
 
     const productResponse = {
       id: product.id,
@@ -307,7 +331,11 @@ const updateProduct = async (req, res) => {
     // Return 200 OK with product data as per Postman tests
     res.status(200).json(productResponse);
   } catch (error) {
-    console.error("Error updating product:", error);
+    logger.error("Error updating product", {
+      error: error.message,
+      stack: error.stack,
+      productId: req.params.productId,
+    });
 
     // Handle unique constraint errors
     if (error.name === "SequelizeUniqueConstraintError") {
@@ -367,12 +395,21 @@ const deleteProduct = async (req, res) => {
       });
     }
 
-    // Delete product
-    await product.destroy();
+    // Delete product with metrics tracking
+    await trackQuery(() => product.destroy(), "delete", "products");
+
+    logger.info("Product deleted successfully", {
+      productId: productId,
+      ownerId: req.user.id,
+    });
 
     res.status(204).send();
   } catch (error) {
-    console.error("Error deleting product:", error);
+    logger.error("Error deleting product", {
+      error: error.message,
+      stack: error.stack,
+      productId: req.params.productId,
+    });
     res.status(500).json({
       error: "Internal Server Error",
       message: "An error occurred while deleting the product",

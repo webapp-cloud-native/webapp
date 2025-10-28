@@ -1,5 +1,7 @@
 const { User } = require("../models/User");
 const { validationResult } = require("express-validator");
+const { trackQuery } = require("../utils/dbMetrics");
+const logger = require("../config/logger");
 
 // Create a new user
 const createUser = async (req, res) => {
@@ -16,24 +18,33 @@ const createUser = async (req, res) => {
 
     const { username, password, first_name, last_name } = req.body;
 
-    // Check if user already exists
-    const existingUser = await User.findByUsername(username);
-    if (existingUser) {
+    // Additional validation: ensure username is lowercase email
+    if (!username || typeof username !== "string") {
       return res.status(400).json({
         error: "Bad Request",
-        message: "User with this username already exists",
+        message: "Username is required and must be a string",
       });
     }
 
-    // Create new user
-    const user = await User.create({
-      username,
-      password,
-      first_name,
-      last_name,
+    // Create user with metrics tracking
+    const user = await trackQuery(
+      () =>
+        User.create({
+          username: username.toLowerCase(),
+          password,
+          first_name,
+          last_name,
+        }),
+      "insert",
+      "users"
+    );
+
+    logger.info("User created successfully", {
+      userId: user.id,
+      username: user.username,
     });
 
-    // Return user data without password
+    // Return user without password
     const userResponse = {
       id: user.id,
       username: user.username,
@@ -45,7 +56,10 @@ const createUser = async (req, res) => {
 
     res.status(201).json(userResponse);
   } catch (error) {
-    console.error("Error creating user:", error);
+    logger.error("Error creating user", {
+      error: error.message,
+      stack: error.stack,
+    });
 
     // Handle unique constraint errors
     if (error.name === "SequelizeUniqueConstraintError") {
@@ -100,6 +114,10 @@ const getUser = async (req, res) => {
 
     const user = req.user; // Set by authentication middleware
 
+    logger.info("User information retrieved", {
+      userId: user.id,
+    });
+
     const userResponse = {
       id: user.id,
       username: user.username,
@@ -111,7 +129,11 @@ const getUser = async (req, res) => {
 
     res.status(200).json(userResponse);
   } catch (error) {
-    console.error("Error getting user:", error);
+    logger.error("Error getting user", {
+      error: error.message,
+      stack: error.stack,
+      userId: req.params.userId,
+    });
     res.status(500).json({
       error: "Internal Server Error",
       message: "An error occurred while retrieving user information",
@@ -177,13 +199,22 @@ const updateUser = async (req, res) => {
       });
     }
 
-    // Update user
-    await user.update(updateData);
+    // Update user with metrics tracking
+    await trackQuery(() => user.update(updateData), "update", "users");
+
+    logger.info("User updated successfully", {
+      userId: user.id,
+      updatedFields: Object.keys(updateData),
+    });
 
     // Return 204 No Content as per Postman tests
     res.status(204).send();
   } catch (error) {
-    console.error("Error updating user:", error);
+    logger.error("Error updating user", {
+      error: error.message,
+      stack: error.stack,
+      userId: req.params.userId,
+    });
 
     // Handle validation errors
     if (error.name === "SequelizeValidationError") {

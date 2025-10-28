@@ -5,6 +5,8 @@ const {
   deleteFromS3,
   getS3Path,
 } = require("../services/s3Service");
+const { trackQuery } = require("../utils/dbMetrics");
+const logger = require("../config/logger");
 
 /**
  * POST /v1/product/{productId}/image
@@ -19,6 +21,10 @@ async function uploadImage(req, res) {
     // Verify product exists
     const product = await Product.findByPk(productId);
     if (!product) {
+      logger.warn("Image upload failed - Product not found", {
+        productId: productId,
+        userId: userId,
+      });
       return res.status(404).json({
         error: "Not Found",
         message: "Product not found",
@@ -27,24 +33,40 @@ async function uploadImage(req, res) {
 
     // Verify user owns the product
     if (product.owner_user_id !== userId) {
+      logger.warn("Image upload forbidden - User does not own product", {
+        productId: productId,
+        userId: userId,
+        ownerId: product.owner_user_id,
+      });
       return res.status(403).json({
         error: "Forbidden",
         message: "You can only upload images to products that you own",
       });
     }
 
-    // Upload to S3
+    // Upload to S3 (metrics tracked in s3Service)
     const s3Result = await uploadToS3(file, userId, productId);
 
-    // Save metadata to database
-    const image = await Image.create({
-      product_id: productId,
-      user_id: userId,
-      file_name: file.originalname,
-      s3_bucket_path: s3Result.s3Key,
-      content_type: s3Result.contentType,
-      file_size: s3Result.size,
-      date_created: new Date(),
+    // Save metadata to database with metrics tracking
+    const image = await trackQuery(
+      () =>
+        Image.create({
+          product_id: productId,
+          user_id: userId,
+          file_name: file.originalname,
+          s3_bucket_path: s3Result.s3_bucket_path,
+          date_created: new Date(),
+        }),
+      "insert",
+      "images"
+    );
+
+    logger.info("Image uploaded successfully", {
+      imageId: image.image_id,
+      productId: productId,
+      userId: userId,
+      fileName: file.originalname,
+      fileSize: file.size,
     });
 
     // Return response
@@ -53,10 +75,15 @@ async function uploadImage(req, res) {
       product_id: image.product_id,
       file_name: image.file_name,
       date_created: image.date_created,
-      s3_bucket_path: image.s3_bucket_path,
+      s3_bucket_path: getS3Path(image.s3_bucket_path),
     });
   } catch (error) {
-    console.error("Upload image error:", error);
+    logger.error("Upload image error", {
+      error: error.message,
+      stack: error.stack,
+      productId: req.params.productId,
+      userId: req.user ? req.user.id : null,
+    });
     return res.status(500).json({
       error: "Internal Server Error",
       message: "Failed to upload image",
@@ -75,16 +102,29 @@ async function getAllImages(req, res) {
     // Verify product exists
     const product = await Product.findByPk(productId);
     if (!product) {
+      logger.warn("Get all images failed - Product not found", {
+        productId: productId,
+      });
       return res.status(404).json({
         error: "Not Found",
         message: "Product not found",
       });
     }
 
-    // Get all images for this product
-    const images = await Image.findAll({
-      where: { product_id: productId },
-      order: [["date_created", "DESC"]],
+    // Get all images for this product with metrics tracking
+    const images = await trackQuery(
+      () =>
+        Image.findAll({
+          where: { product_id: productId },
+          order: [["date_created", "DESC"]],
+        }),
+      "select",
+      "images"
+    );
+
+    logger.info("Images retrieved successfully", {
+      productId: productId,
+      imageCount: images.length,
     });
 
     // Format response
@@ -98,7 +138,11 @@ async function getAllImages(req, res) {
 
     return res.status(200).json(formattedImages);
   } catch (error) {
-    console.error("Get all images error:", error);
+    logger.error("Get all images error", {
+      error: error.message,
+      stack: error.stack,
+      productId: req.params.productId,
+    });
     return res.status(500).json({
       error: "Internal Server Error",
       message: "Failed to retrieve images",
@@ -118,26 +162,44 @@ async function getImageById(req, res) {
     // Verify product exists
     const product = await Product.findByPk(productId);
     if (!product) {
+      logger.warn("Get image by ID failed - Product not found", {
+        productId: productId,
+        imageId: imageId,
+      });
       return res.status(404).json({
         error: "Not Found",
         message: "Product not found",
       });
     }
 
-    // Find image
-    const image = await Image.findOne({
-      where: {
-        image_id: imageId,
-        product_id: productId,
-      },
-    });
+    // Find image with metrics tracking
+    const image = await trackQuery(
+      () =>
+        Image.findOne({
+          where: {
+            image_id: imageId,
+            product_id: productId,
+          },
+        }),
+      "select",
+      "images"
+    );
 
     if (!image) {
+      logger.warn("Image not found", {
+        productId: productId,
+        imageId: imageId,
+      });
       return res.status(404).json({
         error: "Not Found",
         message: "Image not found",
       });
     }
+
+    logger.info("Image retrieved successfully", {
+      imageId: image.image_id,
+      productId: productId,
+    });
 
     // Return image details
     return res.status(200).json({
@@ -148,7 +210,12 @@ async function getImageById(req, res) {
       s3_bucket_path: getS3Path(image.s3_bucket_path),
     });
   } catch (error) {
-    console.error("Get image by ID error:", error);
+    logger.error("Get image by ID error", {
+      error: error.message,
+      stack: error.stack,
+      productId: req.params.productId,
+      imageId: req.params.imageId,
+    });
     return res.status(500).json({
       error: "Internal Server Error",
       message: "Failed to retrieve image",
@@ -169,6 +236,11 @@ async function deleteImage(req, res) {
     // Verify product exists
     const product = await Product.findByPk(productId);
     if (!product) {
+      logger.warn("Delete image failed - Product not found", {
+        productId: productId,
+        imageId: imageId,
+        userId: userId,
+      });
       return res.status(404).json({
         error: "Not Found",
         message: "Product not found",
@@ -177,21 +249,35 @@ async function deleteImage(req, res) {
 
     // Verify user owns the product
     if (product.owner_user_id !== userId) {
+      logger.warn("Delete image forbidden - User does not own product", {
+        productId: productId,
+        userId: userId,
+        ownerId: product.owner_user_id,
+      });
       return res.status(403).json({
         error: "Forbidden",
         message: "You can only delete images from products that you own",
       });
     }
 
-    // Find image
-    const image = await Image.findOne({
-      where: {
-        image_id: imageId,
-        product_id: productId,
-      },
-    });
+    // Find image with metrics tracking
+    const image = await trackQuery(
+      () =>
+        Image.findOne({
+          where: {
+            image_id: imageId,
+            product_id: productId,
+          },
+        }),
+      "select",
+      "images"
+    );
 
     if (!image) {
+      logger.warn("Delete image failed - Image not found", {
+        productId: productId,
+        imageId: imageId,
+      });
       return res.status(404).json({
         error: "Not Found",
         message: "Image not found",
@@ -200,22 +286,40 @@ async function deleteImage(req, res) {
 
     // Verify user owns the image
     if (image.user_id !== userId) {
+      logger.warn("Delete image forbidden - User does not own image", {
+        productId: productId,
+        imageId: imageId,
+        userId: userId,
+        imageOwnerId: image.user_id,
+      });
       return res.status(403).json({
         error: "Forbidden",
         message: "You can only delete images that you uploaded",
       });
     }
 
-    // Delete from S3
+    // Delete from S3 (metrics tracked in s3Service)
     await deleteFromS3(image.s3_bucket_path);
 
-    // Delete from database (hard delete)
-    await image.destroy();
+    // Delete from database (hard delete) with metrics tracking
+    await trackQuery(() => image.destroy(), "delete", "images");
+
+    logger.info("Image deleted successfully", {
+      imageId: imageId,
+      productId: productId,
+      userId: userId,
+    });
 
     // Return 204 No Content
     return res.status(204).send();
   } catch (error) {
-    console.error("Delete image error:", error);
+    logger.error("Delete image error", {
+      error: error.message,
+      stack: error.stack,
+      productId: req.params.productId,
+      imageId: req.params.imageId,
+      userId: req.user ? req.user.id : null,
+    });
     return res.status(500).json({
       error: "Internal Server Error",
       message: "Failed to delete image",

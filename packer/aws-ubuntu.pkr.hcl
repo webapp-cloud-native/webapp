@@ -103,6 +103,12 @@ build {
     destination = "/tmp/webapp.service"
   }
 
+  # Copy CloudWatch Agent configuration file
+  provisioner "file" {
+    source      = "cloudwatch-config.json"
+    destination = "/tmp/cloudwatch-config.json"
+  }
+
   # Copy setup script
   provisioner "file" {
     source      = "../setup.sh"
@@ -123,6 +129,16 @@ build {
     ]
   }
 
+  # Copy CloudWatch config to proper location
+  provisioner "shell" {
+    inline = [
+      "sudo cp /tmp/cloudwatch-config.json /opt/aws/amazon-cloudwatch-agent/etc/cloudwatch-config.json",
+      "sudo chown root:root /opt/aws/amazon-cloudwatch-agent/etc/cloudwatch-config.json",
+      "sudo chmod 644 /opt/aws/amazon-cloudwatch-agent/etc/cloudwatch-config.json",
+      "echo 'CloudWatch configuration file copied'"
+    ]
+  }
+
   # Verify installation
   provisioner "shell" {
     inline = [
@@ -132,6 +148,8 @@ build {
       "id csye6225",
       "echo 'Verifying application directory...'",
       "ls -la /opt/csye6225/",
+      "echo 'Verifying CloudWatch Agent...'",
+      "ls -la /opt/aws/amazon-cloudwatch-agent/etc/cloudwatch-config.json",
       "echo 'Verifying systemd service...'",
       "sudo systemctl status webapp.service --no-pager || echo 'Service configured but not running (expected during build)'",
       "echo 'Verification complete!'"

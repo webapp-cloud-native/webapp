@@ -5,6 +5,8 @@ const {
 } = require("@aws-sdk/client-s3");
 const { v4: uuidv4 } = require("uuid");
 const path = require("path");
+const metricsService = require("./metrics.service");
+const logger = require("../config/logger");
 
 // Initialize S3 Client (uses IAM role from EC2 instance)
 const s3Client = new S3Client({
@@ -30,11 +32,9 @@ function generateS3Key(userId, productId, originalFilename) {
  * Upload file to S3 bucket
  */
 async function uploadToS3(file, userId, productId) {
-  try {
-    if (!BUCKET_NAME) {
-      throw new Error("S3_BUCKET_NAME environment variable is not set");
-    }
+  const startTime = Date.now();
 
+  try {
     const s3Key = generateS3Key(userId, productId, file.originalname);
 
     const uploadParams = {
@@ -42,27 +42,41 @@ async function uploadToS3(file, userId, productId) {
       Key: s3Key,
       Body: file.buffer,
       ContentType: file.mimetype,
-      ServerSideEncryption: "AES256",
-      Metadata: {
-        originalName: file.originalname,
-        userId: userId.toString(),
-        productId: productId.toString(),
-        uploadDate: new Date().toISOString(),
-      },
     };
 
     const command = new PutObjectCommand(uploadParams);
     await s3Client.send(command);
 
-    return {
+    // Record successful S3 upload metrics
+    const duration = Date.now() - startTime;
+    metricsService.recordS3Operation("upload", duration, true);
+
+    logger.info("S3 upload successful", {
       s3Key: s3Key,
-      bucket: BUCKET_NAME,
-      size: file.size,
-      contentType: file.mimetype,
+      fileName: file.originalname,
+      fileSize: file.size,
+      userId: userId,
+      productId: productId,
+      duration: duration,
+    });
+
+    return {
+      s3_bucket_path: s3Key,
+      file_name: file.originalname,
     };
   } catch (error) {
-    console.error("S3 upload error:", error);
-    throw new Error(`Failed to upload file to S3: ${error.message}`);
+    // Record failed S3 upload metrics
+    const duration = Date.now() - startTime;
+    metricsService.recordS3Operation("upload", duration, false);
+
+    logger.error("S3 upload error", {
+      error: error.message,
+      stack: error.stack,
+      fileName: file.originalname,
+      userId: userId,
+      productId: productId,
+    });
+    throw new Error("Failed to upload file to S3");
   }
 }
 
@@ -70,11 +84,9 @@ async function uploadToS3(file, userId, productId) {
  * Delete file from S3 bucket
  */
 async function deleteFromS3(s3Key) {
-  try {
-    if (!BUCKET_NAME) {
-      throw new Error("S3_BUCKET_NAME environment variable is not set");
-    }
+  const startTime = Date.now();
 
+  try {
     const deleteParams = {
       Bucket: BUCKET_NAME,
       Key: s3Key,
@@ -83,11 +95,27 @@ async function deleteFromS3(s3Key) {
     const command = new DeleteObjectCommand(deleteParams);
     await s3Client.send(command);
 
-    console.log(`Successfully deleted file from S3: ${s3Key}`);
+    // Record successful S3 delete metrics
+    const duration = Date.now() - startTime;
+    metricsService.recordS3Operation("delete", duration, true);
+
+    logger.info("S3 delete successful", {
+      s3Key: s3Key,
+      duration: duration,
+    });
+
     return true;
   } catch (error) {
-    console.error("S3 delete error:", error);
-    throw new Error(`Failed to delete file from S3: ${error.message}`);
+    // Record failed S3 delete metrics
+    const duration = Date.now() - startTime;
+    metricsService.recordS3Operation("delete", duration, false);
+
+    logger.error("S3 delete error", {
+      error: error.message,
+      stack: error.stack,
+      s3Key: s3Key,
+    });
+    throw new Error("Failed to delete file from S3");
   }
 }
 

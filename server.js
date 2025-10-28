@@ -5,6 +5,8 @@ const {
   initializeDatabase,
   closeDatabaseConnection,
 } = require("./src/services/databaseService");
+const logger = require("./src/config/logger");
+const metricsMiddleware = require("./src/middleware/metrics.middleware");
 
 // Import routes
 const healthRoutes = require("./src/routes/healthRoutes");
@@ -24,6 +26,8 @@ const HOST = "0.0.0.0"; // IPv4 binding to prevent IPv6 connection attempts
 app.use(express.json());
 // JSON error handler (catches the SyntaxError)
 app.use(jsonErrorHandler);
+
+app.use(metricsMiddleware);
 
 // Request logging middleware (optional, for debugging)
 if (process.env.NODE_ENV === "development") {
@@ -55,36 +59,38 @@ app.use(errorHandler);
 
 async function startServer() {
   try {
-    console.log("Starting Web Application Server...");
+    logger.info("Starting Web Application Server...");
 
     // Ensure database exists
     await ensureDatabaseExists();
-    console.log("Database bootstrapping completed");
+    logger.info("Database bootstrapping completed");
 
     // Initialize database tables and associations
     await initializeDatabase();
 
     // Start HTTP server
     const server = app.listen(PORT, HOST, () => {
-      console.log(`Server running on http://${HOST}:${PORT}`);
-      console.log("Environment:", process.env.NODE_ENV || "development");
-      console.log("Ready to receive requests");
+      logger.info("Server started successfully", {
+        host: HOST,
+        port: PORT,
+        environment: process.env.NODE_ENV || "development",
+        nodeVersion: process.version,
+      });
     });
 
-    // Graceful shutdown handling
     const gracefulShutdown = async (signal) => {
-      console.log(`Received ${signal}, initiating graceful shutdown...`);
+      logger.info(`Received ${signal}, initiating graceful shutdown...`);
 
       server.close(async () => {
-        console.log("HTTP server closed");
+        logger.info("HTTP server closed");
         await closeDatabaseConnection();
-        console.log("Database connections closed");
+        logger.info("Database connections closed");
         process.exit(0);
       });
 
       // Force close server after 30 seconds
       setTimeout(() => {
-        console.error(
+        logger.error(
           "Could not close connections in time, forcefully shutting down"
         );
         process.exit(1);
@@ -95,8 +101,10 @@ async function startServer() {
     process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
     process.on("SIGINT", () => gracefulShutdown("SIGINT"));
   } catch (error) {
-    console.error("Failed to start server:", error.message);
-    console.error("Full error:", error);
+    logger.error("Failed to start server", {
+      error: error.message,
+      stack: error.stack,
+    });
     await closeDatabaseConnection();
     process.exit(1);
   }
@@ -104,14 +112,20 @@ async function startServer() {
 
 // Handle uncaught exceptions
 process.on("uncaughtException", async (error) => {
-  console.error("Uncaught Exception:", error);
+  logger.error("Uncaught Exception", {
+    error: error.message,
+    stack: error.stack,
+  });
   await closeDatabaseConnection();
   process.exit(1);
 });
 
 // Handle unhandled promise rejections
 process.on("unhandledRejection", async (reason, promise) => {
-  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  logger.error("Unhandled Rejection", {
+    promise: promise,
+    reason: reason,
+  });
   await closeDatabaseConnection();
   process.exit(1);
 });
