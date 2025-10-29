@@ -55,6 +55,8 @@ async function uploadImage(req, res) {
           user_id: userId,
           file_name: file.originalname,
           s3_bucket_path: s3Result.s3_bucket_path,
+          content_type: file.mimetype,
+          file_size: file.size,
           date_created: new Date(),
         }),
       "insert",
