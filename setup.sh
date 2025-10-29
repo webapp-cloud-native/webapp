@@ -45,6 +45,33 @@ npm --version
 
 echo "Node.js installed successfully"
 
+# ============================================
+# 5. INSTALL CLOUDWATCH AGENT
+# ============================================
+echo "Step 5: Installing CloudWatch Agent..."
+
+# Download CloudWatch Agent
+wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb -O /tmp/amazon-cloudwatch-agent.deb
+
+# Install CloudWatch Agent
+sudo dpkg -i /tmp/amazon-cloudwatch-agent.deb
+
+# Verify CloudWatch Agent installation
+if command -v /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl &> /dev/null; then
+    echo "CloudWatch Agent installed successfully"
+else
+    echo "ERROR: CloudWatch Agent installation failed"
+    exit 1
+fi
+
+# Create CloudWatch Agent configuration directory
+sudo mkdir -p /opt/aws/amazon-cloudwatch-agent/etc/
+
+# Clean up
+sudo rm -f /tmp/amazon-cloudwatch-agent.deb
+
+echo "CloudWatch Agent installation complete"
+
 
 # ============================================
 # 6. CREATE APPLICATION GROUP (IDEMPOTENT)
@@ -100,6 +127,22 @@ else
     echo "WARNING: webapp.zip not found in /tmp/"
     echo "Skipping application deployment (might be testing)"
 fi
+
+# ============================================
+# 8.5. CREATE LOG DIRECTORY FOR APPLICATION
+# ============================================
+echo "Step 8.5: Creating log directory..."
+
+# Create log directory
+sudo mkdir -p /var/log/webapp
+
+# Set ownership to application user
+sudo chown csye6225:csye6225 /var/log/webapp
+
+# Set permissions
+sudo chmod 755 /var/log/webapp
+
+echo "Log directory created at /var/log/webapp"
 
 # ============================================
 # 9. COPY ENVIRONMENT FILE
@@ -213,11 +256,14 @@ echo "============================================"
 echo ""
 echo "Summary:"
 echo "- Node.js 18.x installed"
+echo "- CloudWatch Agent installed"
 echo "- User csye6225 created (nologin)"
 echo "- Application deployed to /opt/csye6225"
+echo "- Log directory created at /var/log/webapp"
 echo "- Systemd service configured"
 echo ""
 echo "The application will start automatically on instance boot."
+echo "CloudWatch Agent will be configured and started via EC2 user data."
 echo "============================================"
 
 exit 0
