@@ -1,6 +1,7 @@
 {
   "agent": {
-    "metrics_collection_interval": 60,
+    "metrics_collection_interval": 10,
+    "logfile": "/var/logs/amazon-cloudwatch-agent.log",
     "run_as_user": "root"
   },
   "logs": {
@@ -9,14 +10,14 @@
         "collect_list": [
           {
             "file_path": "/var/log/webapp/app.log",
-            "log_group_name": "/aws/ec2/webapp",
+            "log_group_name": "csye6225",
             "log_stream_name": "{instance_id}/application",
             "retention_in_days": 7,
             "timezone": "UTC"
           },
           {
             "file_path": "/var/log/webapp/error.log",
-            "log_group_name": "/aws/ec2/webapp",
+            "log_group_name": "csye6225",
             "log_stream_name": "{instance_id}/error",
             "retention_in_days": 7,
             "timezone": "UTC"
@@ -30,8 +31,8 @@
     "metrics_collected": {
       "statsd": {
         "service_address": ":8125",
-        "metrics_collection_interval": 60,
-        "metrics_aggregation_interval": 60
+        "metrics_collection_interval": 15,
+        "metrics_aggregation_interval": 300
       }
     }
   }
