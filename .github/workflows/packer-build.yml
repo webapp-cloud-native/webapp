@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-ami:
-    name: Build and Share AMI
+    name: Build and Deploy AMI
     runs-on: ubuntu-latest
     if: github.repository == 'webapp-cloud-native/webapp'
     env:
@@ -125,3 +125,113 @@ jobs:
           echo "AMI ID: ${{ steps.ami.outputs.AMI_ID }}"
           echo "Region: ${{ env.AWS_REGION }}"
           echo "Shared with DEMO account: ${{ secrets.DEMO_ACCOUNT_ID }}"
+
+          # Step 14: Configure AWS credentials for DEMO account
+      - name: Configure AWS Credentials for DEMO
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_DEMO }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_DEMO }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Step 15: Create new Launch Template version with new AMI
+      - name: Create Launch Template Version
+        id: lt_version
+        run: |
+          LAUNCH_TEMPLATE_ID=$(aws ec2 describe-launch-templates \
+            --filters "Name=tag:Name,Values=*demo*" \
+            --query 'LaunchTemplates[0].LaunchTemplateId' \
+            --output text)
+
+          echo "Launch Template ID: $LAUNCH_TEMPLATE_ID"
+
+          # Create new version with the new AMI
+          NEW_VERSION=$(aws ec2 create-launch-template-version \
+            --launch-template-id $LAUNCH_TEMPLATE_ID \
+            --source-version '$Latest' \
+            --launch-template-data "ImageId=${{ steps.ami.outputs.AMI_ID }}" \
+            --query 'LaunchTemplateVersion.VersionNumber' \
+            --output text)
+
+          echo "Created Launch Template Version: $NEW_VERSION"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+          # Set new version as default
+          aws ec2 modify-launch-template \
+            --launch-template-id $LAUNCH_TEMPLATE_ID \
+            --default-version $NEW_VERSION
+
+          echo "Set version $NEW_VERSION as default"
+
+      # Step 16: Trigger Instance Refresh
+      - name: Start Instance Refresh
+        id: refresh
+        run: |
+          ASG_NAME="aniruddha-demo-vpc-asg"
+
+          echo "Starting instance refresh for ASG: $ASG_NAME"
+
+          REFRESH_ID=$(aws autoscaling start-instance-refresh \
+            --auto-scaling-group-name $ASG_NAME \
+            --preferences '{
+              "MinHealthyPercentage": 50,
+              "InstanceWarmup": 300,
+              "CheckpointPercentages": [50, 100]
+            }' \
+            --query 'InstanceRefreshId' \
+            --output text)
+
+          echo "Instance Refresh ID: $REFRESH_ID"
+          echo "refresh_id=$REFRESH_ID" >> $GITHUB_OUTPUT
+
+      # Step 17: Wait for Instance Refresh to Complete
+      - name: Wait for Instance Refresh Completion
+        run: |
+          ASG_NAME="aniruddha-demo-vpc-asg"
+          REFRESH_ID="${{ steps.refresh.outputs.refresh_id }}"
+
+          echo "Waiting for instance refresh $REFRESH_ID to complete..."
+          echo "This may take 5-15 minutes depending on your ASG size and health check settings."
+
+          while true; do
+            STATUS=$(aws autoscaling describe-instance-refreshes \
+              --auto-scaling-group-name $ASG_NAME \
+              --instance-refresh-ids $REFRESH_ID \
+              --query 'InstanceRefreshes[0].Status' \
+              --output text)
+            
+            echo "Current Status: $STATUS"
+            
+            case $STATUS in
+              "Successful")
+                echo "✅ Instance refresh completed successfully!"
+                exit 0
+                ;;
+              "Failed"|"Cancelled")
+                echo "❌ Instance refresh failed or was cancelled"
+                exit 1
+                ;;
+              "Pending"|"InProgress")
+                echo "⏳ Still in progress... checking again in 30 seconds"
+                sleep 30
+                ;;
+              *)
+                echo "⚠️ Unknown status: $STATUS"
+                sleep 30
+                ;;
+            esac
+          done
+
+      # Step 18: Deployment Summary
+      - name: Deployment Summary
+        if: always()
+        run: |
+          echo "================================"
+          echo "     DEPLOYMENT SUMMARY"
+          echo "================================"
+          echo "✅ AMI ID: ${{ steps.ami.outputs.AMI_ID }}"
+          echo "✅ Launch Template Version: ${{ steps.lt_version.outputs.version }}"
+          echo "✅ Instance Refresh ID: ${{ steps.refresh.outputs.refresh_id }}"
+          echo "✅ Auto Scaling Group: aniruddha-demo-vpc-asg"
+          echo "================================"
+          echo "New instances are now running with the latest code!"
