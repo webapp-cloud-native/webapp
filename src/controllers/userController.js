@@ -2,6 +2,8 @@ const { User } = require("../models/User");
 const { validationResult } = require("express-validator");
 const { trackQuery } = require("../utils/dbMetrics");
 const logger = require("../config/logger");
+const { publishUserVerification } = require("../services/snsService");
+const { v4: uuidv4 } = require("uuid");
 
 // Create a new user
 const createUser = async (req, res) => {
@@ -26,6 +28,10 @@ const createUser = async (req, res) => {
       });
     }
 
+    // Generate verification token
+    const verificationToken = uuidv4();
+    const tokenCreatedAt = new Date();
+
     // Create user with metrics tracking
     const user = await trackQuery(
       () =>
@@ -34,6 +40,9 @@ const createUser = async (req, res) => {
           password,
           first_name,
           last_name,
+          is_verified: false,
+          verification_token: verificationToken,
+          token_created_at: tokenCreatedAt,
         }),
       "insert",
       "users"
@@ -44,7 +53,28 @@ const createUser = async (req, res) => {
       username: user.username,
     });
 
-    // Return user without password
+    // Publish to SNS for email verification
+    try {
+      await publishUserVerification(
+        user.username,
+        verificationToken,
+        user.first_name
+      );
+      logger.info("Verification email request published to SNS", {
+        userId: user.id,
+        email: user.username,
+      });
+    } catch (snsError) {
+      logger.error("Failed to publish verification email to SNS", {
+        userId: user.id,
+        email: user.username,
+        error: snsError.message,
+      });
+      // Note: We don't fail user creation if SNS publishing fails
+      // The user is created but verification email won't be sent
+    }
+
+    // Return user without password and verification token
     const userResponse = {
       id: user.id,
       username: user.username,
@@ -235,8 +265,97 @@ const updateUser = async (req, res) => {
   }
 };
 
+// Verify user email
+const verifyUser = async (req, res) => {
+  try {
+    const { email, token } = req.query;
+
+    // Validate required parameters
+    if (!email || !token) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: "Email and token are required",
+      });
+    }
+
+    // Find user by email
+    const user = await trackQuery(
+      () => User.findOne({ where: { username: email.toLowerCase() } }),
+      "select",
+      "users"
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        error: "Not Found",
+        message: "User not found",
+      });
+    }
+
+    // Check if user is already verified
+    if (user.is_verified) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: "User is already verified",
+      });
+    }
+
+    // Validate token matches
+    if (user.verification_token !== token) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: "Invalid verification token",
+      });
+    }
+
+    // Check if token has expired (1 minute)
+    const tokenAge = Date.now() - new Date(user.token_created_at).getTime();
+    const oneMinuteInMs = 60 * 1000;
+
+    if (tokenAge > oneMinuteInMs) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: "Verification link has expired",
+      });
+    }
+
+    // Mark user as verified
+    await trackQuery(
+      () =>
+        user.update({
+          is_verified: true,
+          verification_token: null,
+          token_created_at: null,
+        }),
+      "update",
+      "users"
+    );
+
+    logger.info("User verified successfully", {
+      userId: user.id,
+      email: user.username,
+    });
+
+    res.status(200).json({
+      message: "Email verified successfully",
+    });
+  } catch (error) {
+    logger.error("Error verifying user", {
+      error: error.message,
+      stack: error.stack,
+      email: req.query.email,
+    });
+
+    res.status(500).json({
+      error: "Internal Server Error",
+      message: "An error occurred while verifying email",
+    });
+  }
+};
+
 module.exports = {
   createUser,
   getUser,
   updateUser,
+  verifyUser,
 };

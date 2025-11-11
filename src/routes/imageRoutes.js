@@ -6,6 +6,7 @@ const {
   deleteImage,
 } = require("../controllers/imageController");
 const { authenticate } = require("../middleware/auth");
+const { requireVerification } = require("../middleware/verificationCheck");
 const {
   uploadSingleImage,
   handleMulterError,
@@ -18,10 +19,11 @@ const {
 
 const router = express.Router();
 
-// POST /v1/product/{productId}/image - Upload image to product
+// POST /v1/product/{productId}/image - Upload image (requires verification)
 router.post(
   "/v1/product/:productId/image",
   authenticate,
+  requireVerification,
   validateProductId,
   uploadSingleImage,
   handleMulterError,
@@ -39,10 +41,11 @@ router.get(
   getImageById
 );
 
-// DELETE /v1/product/{productId}/image/{imageId} - Delete an image
+// DELETE /v1/product/{productId}/image/{imageId} - Delete image (requires verification)
 router.delete(
   "/v1/product/:productId/image/:imageId",
   authenticate,
+  requireVerification,
   validateProductId,
   deleteImage
 );
