@@ -67,12 +67,10 @@ const User = sequelize.define(
     verification_token: {
       type: DataTypes.UUID,
       allowNull: true,
-      field: "verification_token",
     },
     token_created_at: {
       type: DataTypes.DATE,
       allowNull: true,
-      field: "token_created_at",
     },
     account_created: {
       type: DataTypes.DATE,
