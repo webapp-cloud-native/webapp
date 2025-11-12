@@ -139,11 +139,19 @@ jobs:
         id: lt_version
         run: |
           LAUNCH_TEMPLATE_ID=$(aws ec2 describe-launch-templates \
-            --filters "Name=tag:Name,Values=*demo*" \
+            --filters "Name=tag:Name,Values=aniruddha-demo-vpc-lt-*" \
             --query 'LaunchTemplates[0].LaunchTemplateId' \
             --output text)
 
           echo "Launch Template ID: $LAUNCH_TEMPLATE_ID"
+
+          # Verify we got a valid ID
+          if [ -z "$LAUNCH_TEMPLATE_ID" ] || [ "$LAUNCH_TEMPLATE_ID" == "None" ]; then
+            echo "Error: Could not find launch template with name pattern 'aniruddha-demo-vpc-lt-*'"
+            echo "Attempting to list all launch templates..."
+            aws ec2 describe-launch-templates --query 'LaunchTemplates[*].[LaunchTemplateId,LaunchTemplateName]' --output table
+            exit 1
+          fi
 
           # Create new version with the new AMI
           NEW_VERSION=$(aws ec2 create-launch-template-version \
