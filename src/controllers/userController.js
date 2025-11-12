@@ -5,7 +5,9 @@ const logger = require("../config/logger");
 const { publishUserVerification } = require("../services/snsService");
 const { v4: uuidv4 } = require("uuid");
 
-// Create a new user
+// ============================================
+// CREATE USER
+// ============================================
 const createUser = async (req, res) => {
   try {
     // Check for validation errors
@@ -28,7 +30,7 @@ const createUser = async (req, res) => {
       });
     }
 
-    // Generate verification token
+    // Generate verification token and timestamp
     const verificationToken = uuidv4();
     const tokenCreatedAt = new Date();
 
@@ -118,7 +120,9 @@ const createUser = async (req, res) => {
   }
 };
 
-// Get user information (authenticated user only)
+// ============================================
+// GET USER INFORMATION
+// ============================================
 const getUser = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -148,6 +152,7 @@ const getUser = async (req, res) => {
       userId: user.id,
     });
 
+    // Return user information without password and verification fields
     const userResponse = {
       id: user.id,
       username: user.username,
@@ -171,7 +176,9 @@ const getUser = async (req, res) => {
   }
 };
 
-// Update user information
+// ============================================
+// UPDATE USER INFORMATION
+// ============================================
 const updateUser = async (req, res) => {
   try {
     // Check for validation errors
@@ -237,7 +244,7 @@ const updateUser = async (req, res) => {
       updatedFields: Object.keys(updateData),
     });
 
-    // Return 204 No Content as per Postman tests
+    // Return 204 No Content as per assignment requirements
     res.status(204).send();
   } catch (error) {
     logger.error("Error updating user", {
@@ -265,18 +272,29 @@ const updateUser = async (req, res) => {
   }
 };
 
-// Verify user email
+// ============================================
+// VERIFY USER EMAIL
+// ============================================
 const verifyUser = async (req, res) => {
   try {
     const { email, token } = req.query;
 
-    // Validate required parameters
+    // Validate required query parameters
     if (!email || !token) {
+      logger.warn("Email verification failed: missing parameters", {
+        email: email || "missing",
+        hasToken: !!token,
+      });
       return res.status(400).json({
         error: "Bad Request",
         message: "Email and token are required",
       });
     }
+
+    logger.info("Email verification attempt", {
+      email: email,
+      tokenPrefix: token.substring(0, 8) + "...", // Log partial token for security
+    });
 
     // Find user by email
     const user = await trackQuery(
@@ -286,6 +304,7 @@ const verifyUser = async (req, res) => {
     );
 
     if (!user) {
+      logger.warn("Verification failed: user not found", { email });
       return res.status(404).json({
         error: "Not Found",
         message: "User not found",
@@ -294,28 +313,46 @@ const verifyUser = async (req, res) => {
 
     // Check if user is already verified
     if (user.is_verified) {
-      return res.status(400).json({
-        error: "Bad Request",
-        message: "User is already verified",
+      logger.info("User already verified", {
+        userId: user.id,
+        email: user.username,
+      });
+      return res.status(200).json({
+        message: "Email is already verified. You can log in.",
       });
     }
 
     // Validate token matches
     if (user.verification_token !== token) {
+      logger.warn("Verification failed: invalid token", {
+        userId: user.id,
+        email: user.username,
+        expectedTokenPrefix: user.verification_token
+          ? user.verification_token.substring(0, 8) + "..."
+          : "null",
+        providedTokenPrefix: token.substring(0, 8) + "...",
+      });
       return res.status(400).json({
         error: "Bad Request",
         message: "Invalid verification token",
       });
     }
 
-    // Check if token has expired (1 minute)
+    // Check if token has expired (1 minute = 60,000 ms)
     const tokenAge = Date.now() - new Date(user.token_created_at).getTime();
     const oneMinuteInMs = 60 * 1000;
 
     if (tokenAge > oneMinuteInMs) {
+      logger.warn("Verification failed: token expired", {
+        userId: user.id,
+        email: user.username,
+        tokenAgeSeconds: Math.floor(tokenAge / 1000),
+        expirySeconds: 60,
+      });
       return res.status(400).json({
         error: "Bad Request",
-        message: "Verification link has expired",
+        message:
+          "Verification link has expired. Please request a new verification email.",
       });
     }
 
@@ -334,10 +371,11 @@ const verifyUser = async (req, res) => {
     logger.info("User verified successfully", {
       userId: user.id,
       email: user.username,
+      verificationTimeSeconds: Math.floor(tokenAge / 1000),
     });
 
     res.status(200).json({
-      message: "Email verified successfully",
+      message: "Email verified successfully. You can now log in.",
     });
   } catch (error) {
     logger.error("Error verifying user", {
@@ -353,6 +391,9 @@ const verifyUser = async (req, res) => {
   }
 };
 
+// ============================================
+// EXPORTS
+// ============================================
 module.exports = {
   createUser,
   getUser,
