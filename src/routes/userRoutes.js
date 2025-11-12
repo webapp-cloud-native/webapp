@@ -67,13 +67,14 @@ const validateUserUpdate = [
 // POST /v1/user - Create new user
 router.post("/v1/user", validateUserCreation, createUser);
 
-// GET /v1/user/verify - Verify user email (MUST BE BEFORE :userId route)
+// ⚠️ CRITICAL: Verification route MUST be before parameterized routes
+// GET /v1/user/verify - Verify user email (NO AUTHENTICATION REQUIRED)
 router.get("/v1/user/verify", verifyUser);
 
-// GET /v1/user/:userId - Get user information (requires verification)
+// GET /v1/user/:userId - Get user information (requires authentication AND verification)
 router.get("/v1/user/:userId", authenticate, requireVerification, getUser);
 
-// PUT /v1/user/:userId - Update user information (requires verification)
+// PUT /v1/user/:userId - Update user information (requires authentication AND verification)
 router.put(
   "/v1/user/:userId",
   authenticate,
@@ -89,6 +90,16 @@ router.all("/v1/user", (req, res) => {
     return res.status(405).json({
       error: "Method Not Allowed",
       message: "Only POST method is allowed for user creation",
+    });
+  }
+});
+
+router.all("/v1/user/verify", (req, res) => {
+  if (req.method !== "GET") {
+    res.set("Allow", "GET");
+    return res.status(405).json({
+      error: "Method Not Allowed",
+      message: "Only GET method is allowed for email verification",
     });
   }
 });
