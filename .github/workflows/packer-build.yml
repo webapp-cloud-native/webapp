@@ -138,16 +138,16 @@ jobs:
       - name: Create Launch Template Version
         id: lt_version
         run: |
+          # Find launch template - use the exact prefix without wildcards in the filter value
           LAUNCH_TEMPLATE_ID=$(aws ec2 describe-launch-templates \
-            --filters "Name=tag:Name,Values=aniruddha-demo-vpc-lt-*" \
-            --query 'LaunchTemplates[0].LaunchTemplateId' \
+            --query 'LaunchTemplates[?contains(LaunchTemplateName, `demo-vpc-lt`)].LaunchTemplateId | [0]' \
             --output text)
 
           echo "Launch Template ID: $LAUNCH_TEMPLATE_ID"
 
           # Verify we got a valid ID
           if [ -z "$LAUNCH_TEMPLATE_ID" ] || [ "$LAUNCH_TEMPLATE_ID" == "None" ]; then
-            echo "Error: Could not find launch template with name pattern 'aniruddha-demo-vpc-lt-*'"
+            echo "Error: Could not find launch template containing 'demo-vpc-lt'"
             echo "Attempting to list all launch templates..."
             aws ec2 describe-launch-templates --query 'LaunchTemplates[*].[LaunchTemplateId,LaunchTemplateName]' --output table
             exit 1
