@@ -24,7 +24,7 @@ async function publishUserVerification(email, token, firstName) {
   const message = {
     email: email,
     token: token,
-    firstName: firstName,
+    first_name: firstName,
   };
 
   const params = {
