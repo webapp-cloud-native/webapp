@@ -25,7 +25,7 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
 # 3. INSTALL REQUIRED TOOLS
 # ============================================
 echo "Step 3: Installing required tools..."
-sudo apt-get install -y unzip curl wget
+sudo apt-get install -y unzip curl wget jq
 
 # ============================================
 # 4. INSTALL NODE.JS 18.x
