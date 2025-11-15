@@ -138,18 +138,19 @@ jobs:
       - name: Create Launch Template Version
         id: lt_version
         run: |
-          # Find launch template - use the exact prefix without wildcards in the filter value
-          LAUNCH_TEMPLATE_ID=$(aws ec2 describe-launch-templates \
-            --query 'LaunchTemplates[?contains(LaunchTemplateName, `demo-vpc-lt`)].LaunchTemplateId | [0]' \
+          ASG_NAME="aniruddha-demo-vpc-asg"
+
+          # Get Launch Template from Auto Scaling Group
+          LAUNCH_TEMPLATE_ID=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names $ASG_NAME \
+            --query 'AutoScalingGroups[0].LaunchTemplate.LaunchTemplateId' \
             --output text)
 
-          echo "Launch Template ID: $LAUNCH_TEMPLATE_ID"
+          echo "Launch Template ID from ASG: $LAUNCH_TEMPLATE_ID"
 
           # Verify we got a valid ID
           if [ -z "$LAUNCH_TEMPLATE_ID" ] || [ "$LAUNCH_TEMPLATE_ID" == "None" ]; then
-            echo "Error: Could not find launch template containing 'demo-vpc-lt'"
-            echo "Attempting to list all launch templates..."
-            aws ec2 describe-launch-templates --query 'LaunchTemplates[*].[LaunchTemplateId,LaunchTemplateName]' --output table
+            echo "Error: Could not find launch template for ASG: $ASG_NAME"
             exit 1
           fi
 
