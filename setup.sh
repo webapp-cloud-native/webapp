@@ -109,19 +109,19 @@ echo "Step 8: Deploying application files to /opt/csye6225/..."
 if [ -f /tmp/webapp.zip ]; then
     # Extract to /opt/csye6225/
     sudo unzip -o /tmp/webapp.zip -d /opt/csye6225/
-
+    
     # Handle nested webapp folder if it exists
     if [ -d /opt/csye6225/webapp ]; then
         echo "Detected nested webapp folder, flattening structure..."
         sudo cp -r /opt/csye6225/webapp/* /opt/csye6225/
         sudo rm -rf /opt/csye6225/webapp
     fi
-
+    
     # Remove Mac artifacts and unnecessary files
     sudo rm -rf /opt/csye6225/__MACOSX
     sudo find /opt/csye6225 -name ".DS_Store" -delete 2>/dev/null || true
     sudo rm -rf /opt/csye6225/.git 2>/dev/null || true
-
+    
     echo "Application files extracted successfully"
 else
     echo "WARNING: webapp.zip not found in /tmp/"
@@ -187,16 +187,16 @@ echo "Step 11: Installing systemd service..."
 if [ -f /tmp/webapp.service ]; then
     # Copy service file to systemd directory
     sudo cp /tmp/webapp.service /etc/systemd/system/webapp.service
-
+    
     # Set correct permissions
     sudo chmod 644 /etc/systemd/system/webapp.service
-
+    
     # Reload systemd daemon
     sudo systemctl daemon-reload
-
+    
     # Enable service (will start on boot)
     sudo systemctl enable webapp.service
-
+    
     echo "Systemd service installed and enabled"
 else
     echo "WARNING: webapp.service not found in /tmp/"
@@ -265,3 +265,5 @@ echo ""
 echo "The application will start automatically on instance boot."
 echo "CloudWatch Agent will be configured and started via EC2 user data."
 echo "============================================"
+
+exit 0
