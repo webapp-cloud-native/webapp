@@ -80,7 +80,7 @@ build {
 
   # Copy application files
   provisioner "file" {
-    source      = "../webapp.zip"
+    source      = "webapp.zip"  # File is in same directory as workflow
     destination = "/tmp/webapp.zip"
   }
 
@@ -98,7 +98,7 @@ build {
 
   # Copy systemd service file
   provisioner "file" {
-    source      = "../webapp.service"
+    source      = "webapp.service"  # File should be in repo root
     destination = "/tmp/webapp.service"
   }
 
@@ -115,7 +115,7 @@ build {
 
   # Copy CloudWatch config
   provisioner "file" {
-    source      = "../cloudwatch-config.json"
+    source      = "cloudwatch-config.json"  # File should be in repo root
     destination = "/tmp/cloudwatch-config.json"
   }
 
