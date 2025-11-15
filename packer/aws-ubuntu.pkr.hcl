@@ -12,59 +12,32 @@ variable "aws_region" {
   default = "us-east-1"
 }
 
-variable "source_ami" {
-  type    = string
-  default = "ami-0e2c8caa4b6378d8c" # Ubuntu 24.04 LTS in us-east-1
-}
-
-variable "ssh_username" {
-  type    = string
-  default = "ubuntu"
-}
-
-variable "subnet_id" {
-  type    = string
-  default = ""
-}
-
-variable "ami_prefix" {
-  type    = string
-  default = "csye6225"
-}
-
-variable "instance_type" {
-  type    = string
-  default = "t2.micro"
-}
-
 variable "demo_account_id" {
-  type    = string
-  default = "606531835150"
+  type = string
 }
 
 variable "dev_account_id" {
-  type    = string
-  default = "516246499586"
-}
-
-locals {
-  timestamp = regex_replace(timestamp(), "[- TZ:]", "")
-  ami_name  = "${var.ami_prefix}-${local.timestamp}"
+  type = string
 }
 
 source "amazon-ebs" "ubuntu" {
-  ami_name        = local.ami_name
-  ami_description = "Ubuntu 24.04 LTS AMI for CSYE6225 webapp"
-  instance_type   = var.instance_type
   region          = var.aws_region
-  ssh_username    = var.ssh_username
-  source_ami      = var.source_ami
-  ami_users       = [var.demo_account_id]
+  ami_name        = "csye6225-webapp-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+  ami_description = "Ubuntu AMI for CSYE6225 Web Application"
+  instance_type   = "t2.micro"
 
-  aws_polling {
-    delay_seconds = 30
-    max_attempts  = 50
+  source_ami_filter {
+    filters = {
+      name                = "ubuntu/images/hvm-ssd/ubuntu-noble-24.04-amd64-server-*"
+      root-device-type    = "ebs"
+      virtualization-type = "hvm"
+    }
+    most_recent = true
+    owners      = ["099720109477"]
   }
+
+  ssh_username = "ubuntu"
+  ami_users    = [var.demo_account_id, var.dev_account_id]
 
   launch_block_device_mappings {
     device_name           = "/dev/sda1"
@@ -72,91 +45,114 @@ source "amazon-ebs" "ubuntu" {
     volume_type           = "gp2"
     delete_on_termination = true
   }
-
-  tags = {
-    Name        = local.ami_name
-    Environment = "dev"
-    Project     = "CSYE6225"
-    Created_by  = "Packer"
-    Timestamp   = local.timestamp
-  }
 }
 
 build {
   sources = ["source.amazon-ebs.ubuntu"]
 
-  # Copy .env file
-  provisioner "file" {
-    source      = "../.env"
-    destination = "/tmp/.env"
+  # CRITICAL: Install AWS CLI and jq FIRST
+  provisioner "shell" {
+    inline = [
+      "echo '=== Installing system dependencies ==='",
+      "sudo apt-get update -y",
+      "sudo apt-get upgrade -y",
+      "sudo apt-get install -y awscli jq postgresql-client netcat-openbsd unzip",
+      "echo '=== Verifying installations ==='",
+      "aws --version",
+      "jq --version",
+      "psql --version",
+      "nc -h 2>&1 | head -1 || true"
+    ]
   }
 
-  # Copy application zip (will be created by GitHub Actions)
+  # Create application user and directories
+  provisioner "shell" {
+    inline = [
+      "echo '=== Creating application user ==='",
+      "sudo groupadd -r csye6225 || true",
+      "sudo useradd -r -g csye6225 -s /bin/bash csye6225 || true",
+      "sudo mkdir -p /opt/csye6225",
+      "sudo mkdir -p /var/log/webapp",
+      "sudo chown -R csye6225:csye6225 /opt/csye6225",
+      "sudo chown -R csye6225:csye6225 /var/log/webapp"
+    ]
+  }
+
+  # Copy application files
   provisioner "file" {
     source      = "../webapp.zip"
     destination = "/tmp/webapp.zip"
   }
 
+  # Extract and setup application
+  provisioner "shell" {
+    inline = [
+      "echo '=== Setting up application ==='",
+      "sudo unzip -q /tmp/webapp.zip -d /opt/csye6225",
+      "sudo chown -R csye6225:csye6225 /opt/csye6225",
+      "cd /opt/csye6225",
+      "sudo -u csye6225 npm install --production --omit=dev",
+      "sudo rm /tmp/webapp.zip"
+    ]
+  }
+
   # Copy systemd service file
   provisioner "file" {
-    source      = "webapp.service"
+    source      = "../webapp.service"
     destination = "/tmp/webapp.service"
   }
 
-  # Copy CloudWatch Agent configuration file
+  # Setup systemd service
+  provisioner "shell" {
+    inline = [
+      "echo '=== Setting up systemd service ==='",
+      "sudo mv /tmp/webapp.service /etc/systemd/system/webapp.service",
+      "sudo systemctl daemon-reload",
+      "sudo systemctl enable webapp.service",
+      "echo 'Service enabled but not started (will start via user_data)'"
+    ]
+  }
+
+  # Copy CloudWatch config
   provisioner "file" {
-    source      = "cloudwatch-config.json"
+    source      = "../cloudwatch-config.json"
     destination = "/tmp/cloudwatch-config.json"
   }
 
-  # Copy setup script
-  provisioner "file" {
-    source      = "../setup.sh"
-    destination = "/tmp/setup.sh"
-  }
-
-  # Make setup script executable
+  # Install and configure CloudWatch Agent
   provisioner "shell" {
     inline = [
-      "chmod +x /tmp/setup.sh"
-    ]
-  }
-
-  # Run setup script
-  provisioner "shell" {
-    inline = [
-      "sudo /tmp/setup.sh"
-    ]
-  }
-
-  # Copy CloudWatch config to proper location
-  provisioner "shell" {
-    inline = [
+      "echo '=== Installing CloudWatch Agent ==='",
+      "wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb",
+      "sudo dpkg -i -E ./amazon-cloudwatch-agent.deb",
       "sudo mkdir -p /opt/aws/amazon-cloudwatch-agent/etc/",
-      "sudo cp /tmp/cloudwatch-config.json /opt/aws/amazon-cloudwatch-agent/etc/cloudwatch-config.json",
-      "sudo chown root:root /opt/aws/amazon-cloudwatch-agent/etc/cloudwatch-config.json",
-      "sudo chmod 644 /opt/aws/amazon-cloudwatch-agent/etc/cloudwatch-config.json",
-      "echo 'CloudWatch configuration file copied'"
+      "sudo mv /tmp/cloudwatch-config.json /opt/aws/amazon-cloudwatch-agent/etc/cloudwatch-config.json",
+      "rm amazon-cloudwatch-agent.deb",
+      "echo 'CloudWatch Agent installed (will be configured via user_data)'"
     ]
   }
 
-  # Verify installation
+  # Cleanup and validation
   provisioner "shell" {
     inline = [
-      "echo 'Verifying Node.js installation...'",
-      "node --version",
-      "echo 'Verifying csye6225 user...'",
-      "id csye6225",
-      "echo 'Verifying application directory...'",
-      "ls -la /opt/csye6225/",
-      "echo 'Verifying CloudWatch Agent...'",
-      "ls -la /opt/aws/amazon-cloudwatch-agent/etc/cloudwatch-config.json",
-      "echo 'Verifying systemd service...'",
-      "sudo systemctl status webapp.service --no-pager || echo 'Service configured but not running (expected during build)'",
-      "echo 'Verification complete!'"
+      "echo '=== Final validation ==='",
+      "echo 'Checking AWS CLI:'",
+      "which aws && aws --version",
+      "echo 'Checking jq:'",
+      "which jq && jq --version",
+      "echo 'Checking application files:'",
+      "ls -la /opt/csye6225/ | head -10",
+      "echo 'Checking systemd service:'",
+      "systemctl list-unit-files | grep webapp",
+      "echo 'Checking CloudWatch Agent:'",
+      "ls -la /opt/aws/amazon-cloudwatch-agent/etc/",
+      "echo '=== AMI build validation complete ✅ ==='",
+      "sudo apt-get clean",
+      "sudo rm -rf /tmp/* /var/tmp/*"
     ]
   }
 
+  # Create manifest file
   post-processor "manifest" {
     output     = "manifest.json"
     strip_path = true
