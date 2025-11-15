@@ -305,7 +305,3 @@ TF_LOG=DEBUG terraform plan
 
 - DEV: 516246499586
 - DEMO: 606531835150
-
----
-
-CSYE6225 - Cloud Computing
