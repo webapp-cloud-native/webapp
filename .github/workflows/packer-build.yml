@@ -73,7 +73,7 @@ jobs:
             -x "*packer*" \
             -x "*.DS_Store" \
             -x "*coverage*" \
-            -x "*.vscode*"
+            -x "*.vscode*" \
 
           ls -lh webapp.zip
 
@@ -81,8 +81,8 @@ jobs:
           unzip -l webapp.zip | grep "node_modules/" | head -5
           test $(unzip -l webapp.zip | grep -c "node_modules/") -gt 0 || exit 1
 
-      # Step 8: Configure AWS credentials for DEV (where AMI is built)
-      - name: Configure AWS Credentials for DEV
+      # Step 8: Configure AWS credentials
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -117,20 +117,16 @@ jobs:
         run: |
           AMI_ID=$(jq -r '.builds[-1].artifact_id' packer/manifest.json | cut -d ":" -f2)
           echo "AMI_ID=$AMI_ID" >> $GITHUB_OUTPUT
-          echo "✅ Built AMI: $AMI_ID"
+          echo "Built AMI: $AMI_ID"
 
       # Step 13: Output AMI information
       - name: Print AMI Details
         run: |
-          echo "================================"
-          echo "     AMI BUILD COMPLETE"
-          echo "================================"
           echo "AMI ID: ${{ steps.ami.outputs.AMI_ID }}"
           echo "Region: ${{ env.AWS_REGION }}"
-          echo "Shared with DEMO: ${{ secrets.DEMO_ACCOUNT_ID }}"
-          echo "================================"
+          echo "Shared with DEMO account: ${{ secrets.DEMO_ACCOUNT_ID }}"
 
-      # Step 14: Configure AWS credentials for DEMO account
+          # Step 14: Configure AWS credentials for DEMO account
       - name: Configure AWS Credentials for DEMO
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -142,21 +138,19 @@ jobs:
       - name: Create Launch Template Version
         id: lt_version
         run: |
-          # Find launch template by name prefix (without wildcards in filter value)
+          # Find launch template - use the exact prefix without wildcards in the filter value
           LAUNCH_TEMPLATE_ID=$(aws ec2 describe-launch-templates \
-            --region us-east-1 \
-            --query 'LaunchTemplates[?contains(LaunchTemplateName, `demo-vpc-lt`)].LaunchTemplateId' \
-            --output text | head -1)
+            --filters "Name=tag:Name,Values=aniruddha-demo-vpc-lt-*" \
+            --query 'LaunchTemplates[0].LaunchTemplateId' \
+            --output text)
 
           echo "Launch Template ID: $LAUNCH_TEMPLATE_ID"
 
           # Verify we got a valid ID
           if [ -z "$LAUNCH_TEMPLATE_ID" ] || [ "$LAUNCH_TEMPLATE_ID" == "None" ]; then
-            echo "❌ Error: Could not find launch template"
-            echo "Listing all launch templates:"
-            aws ec2 describe-launch-templates \
-              --query 'LaunchTemplates[*].[LaunchTemplateId,LaunchTemplateName]' \
-              --output table
+            echo "Error: Could not find launch template with name pattern 'aniruddha-demo-vpc-lt-*'"
+            echo "Attempting to list all launch templates..."
+            aws ec2 describe-launch-templates --query 'LaunchTemplates[*].[LaunchTemplateId,LaunchTemplateName]' --output table
             exit 1
           fi
 
@@ -168,7 +162,7 @@ jobs:
             --query 'LaunchTemplateVersion.VersionNumber' \
             --output text)
 
-          echo "✅ Created Launch Template Version: $NEW_VERSION"
+          echo "Created Launch Template Version: $NEW_VERSION"
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
           # Set new version as default
@@ -176,7 +170,7 @@ jobs:
             --launch-template-id $LAUNCH_TEMPLATE_ID \
             --default-version $NEW_VERSION
 
-          echo "✅ Set version $NEW_VERSION as default"
+          echo "Set version $NEW_VERSION as default"
 
       # Step 16: Trigger Instance Refresh
       - name: Start Instance Refresh
@@ -184,20 +178,19 @@ jobs:
         run: |
           ASG_NAME="aniruddha-demo-vpc-asg"
 
-          echo "🔄 Starting instance refresh for ASG: $ASG_NAME"
+          echo "Starting instance refresh for ASG: $ASG_NAME"
 
           REFRESH_ID=$(aws autoscaling start-instance-refresh \
             --auto-scaling-group-name $ASG_NAME \
             --preferences '{
               "MinHealthyPercentage": 50,
               "InstanceWarmup": 300,
-              "CheckpointPercentages": [50, 100],
-              "CheckpointDelay": 60
+              "CheckpointPercentages": [50, 100]
             }' \
             --query 'InstanceRefreshId' \
             --output text)
 
-          echo "✅ Instance Refresh ID: $REFRESH_ID"
+          echo "Instance Refresh ID: $REFRESH_ID"
           echo "refresh_id=$REFRESH_ID" >> $GITHUB_OUTPUT
 
       # Step 17: Wait for Instance Refresh to Complete
@@ -206,26 +199,17 @@ jobs:
           ASG_NAME="aniruddha-demo-vpc-asg"
           REFRESH_ID="${{ steps.refresh.outputs.refresh_id }}"
 
-          echo "⏳ Waiting for instance refresh to complete..."
-          echo "This may take 5-15 minutes depending on ASG size and health checks."
+          echo "Waiting for instance refresh $REFRESH_ID to complete..."
+          echo "This may take 5-15 minutes depending on your ASG size and health check settings."
 
-          MAX_WAIT=900  # 15 minutes
-          ELAPSED=0
-
-          while [ $ELAPSED -lt $MAX_WAIT ]; do
+          while true; do
             STATUS=$(aws autoscaling describe-instance-refreshes \
               --auto-scaling-group-name $ASG_NAME \
               --instance-refresh-ids $REFRESH_ID \
               --query 'InstanceRefreshes[0].Status' \
               --output text)
             
-            PERCENTAGE=$(aws autoscaling describe-instance-refreshes \
-              --auto-scaling-group-name $ASG_NAME \
-              --instance-refresh-ids $REFRESH_ID \
-              --query 'InstanceRefreshes[0].PercentageComplete' \
-              --output text)
-            
-            echo "Status: $STATUS | Progress: ${PERCENTAGE}%"
+            echo "Current Status: $STATUS"
             
             case $STATUS in
               "Successful")
@@ -234,42 +218,29 @@ jobs:
                 ;;
               "Failed"|"Cancelled")
                 echo "❌ Instance refresh failed or was cancelled"
-                REASON=$(aws autoscaling describe-instance-refreshes \
-                  --auto-scaling-group-name $ASG_NAME \
-                  --instance-refresh-ids $REFRESH_ID \
-                  --query 'InstanceRefreshes[0].StatusReason' \
-                  --output text)
-                echo "Reason: $REASON"
                 exit 1
                 ;;
               "Pending"|"InProgress")
                 echo "⏳ Still in progress... checking again in 30 seconds"
                 sleep 30
-                ELAPSED=$((ELAPSED + 30))
                 ;;
               *)
                 echo "⚠️ Unknown status: $STATUS"
                 sleep 30
-                ELAPSED=$((ELAPSED + 30))
                 ;;
             esac
           done
-
-          echo "❌ Timeout waiting for instance refresh (15 minutes)"
-          exit 1
 
       # Step 18: Deployment Summary
       - name: Deployment Summary
         if: always()
         run: |
-          echo "======================================="
-          echo "       DEPLOYMENT SUMMARY"
-          echo "======================================="
+          echo "================================"
+          echo "     DEPLOYMENT SUMMARY"
+          echo "================================"
           echo "✅ AMI ID: ${{ steps.ami.outputs.AMI_ID }}"
           echo "✅ Launch Template Version: ${{ steps.lt_version.outputs.version }}"
-          echo "✅ Instance Refresh: ${{ steps.refresh.outputs.refresh_id }}"
+          echo "✅ Instance Refresh ID: ${{ steps.refresh.outputs.refresh_id }}"
           echo "✅ Auto Scaling Group: aniruddha-demo-vpc-asg"
-          echo "======================================="
-          echo "🎉 New instances running with latest code!"
-          echo "🌐 Application URL: https://demo.aniruddha-webapp.me"
-          echo "======================================="
+          echo "================================"
+          echo "New instances are now running with the latest code!"
