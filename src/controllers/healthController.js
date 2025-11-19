@@ -19,7 +19,7 @@ async function healthCheck(req, res) {
       "health_checks"
     );
 
-    logger.info("Health check successful", {
+    logger.info("Assignment 9 Health check successful", {
       checkId: healthCheck.check_id,
     });
 
